@@ -3,6 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { PlusOutlined, DeleteOutlined, ReloadOutlined, ThunderboltOutlined, SaveOutlined } from '@ant-design/icons-vue'
 import { useGameSignApi, type GameSignConfig } from '@/composables/useGameSignApi'
 import { useStatusTag, createStatusTag } from '@/composables/useStatusTag'
+import dayjs from 'dayjs'
 
 const props = defineProps<{
     config: GameSignConfig
@@ -14,7 +15,14 @@ const { loading, signNow, refreshInfo, getStatus, updateConfig } = useGameSignAp
 const saveLoading = ref(false)
 const signLoading = ref(false)
 const refreshLoading = ref(false)
-const statusInfo = reactive({ status: '未知', next_sign_time: '未设定' })
+const statusInfo = reactive({
+    status: '未知',
+    next_sign_time: '',
+    last_sign_time: '',
+    last_report: '',
+    results: [] as any[],
+    infos: [] as any[],
+})
 
 const statusTag = useStatusTag(
     () => statusInfo.status,
@@ -29,11 +37,21 @@ const form = reactive({
     timeoutSeconds: 20,
     showInfoAfterSign: true,
     fetchEvents: true,
-    // 账号列表 — 每个元素为 { alias, token/cookie, ... }
     mihoyoAccounts: [] as Record<string, any>[],
     kuroAccounts: [] as Record<string, any>[],
     sklandAccounts: [] as Record<string, any>[],
 })
+
+// ==================== 时间选择器 ====================
+const signWindowStartDT = ref(dayjs('08:00', 'HH:mm'))
+const signWindowEndDT = ref(dayjs('22:00', 'HH:mm'))
+
+const onStartChange = (time: any) => {
+    if (time) form.signWindowStart = time.format('HH:mm')
+}
+const onEndChange = (time: any) => {
+    if (time) form.signWindowEnd = time.format('HH:mm')
+}
 
 // ==================== 数据加载 ====================
 const loadForm = async () => {
@@ -48,6 +66,9 @@ const loadForm = async () => {
         form.mihoyoAccounts = (config.MihoyoAccounts || []).map((a: any) => ({ ...a }))
         form.kuroAccounts = (config.KuroAccounts || []).map((a: any) => ({ ...a }))
         form.sklandAccounts = (config.SklandAccounts || []).map((a: any) => ({ ...a }))
+        // 同步时间选择器
+        signWindowStartDT.value = dayjs(form.signWindowStart, 'HH:mm')
+        signWindowEndDT.value = dayjs(form.signWindowEnd, 'HH:mm')
     } catch {
         form.mihoyoAccounts = []
         form.kuroAccounts = []
@@ -85,7 +106,12 @@ const handleSave = async () => {
 // ==================== 操作 ====================
 const handleSignNow = async () => {
     signLoading.value = true
-    try { await signNow() } finally { signLoading.value = false }
+    try {
+        await signNow()
+        await loadStatus()
+    } finally {
+        signLoading.value = false
+    }
 }
 
 const handleRefreshInfo = async () => {
@@ -104,6 +130,12 @@ const addSkland = () => {
     form.sklandAccounts.push({ alias: '', token: '', enable_arknights: true, enable_bbs: true })
 }
 
+// ==================== 时间格式化 ====================
+const formatTime = (t: string) => {
+    if (!t) return '--'
+    try { return dayjs(t).format('MM-DD HH:mm:ss') } catch { return t }
+}
+
 onMounted(() => {
     loadForm()
     loadStatus()
@@ -119,21 +151,77 @@ onMounted(() => {
             </p>
         </div>
 
-        <div class="status-bar">
-            <a-space>
-                <a-tag v-if="statusTag" :color="statusTag.color">{{ statusTag.text }}</a-tag>
-                <span v-if="statusInfo.next_sign_time && statusInfo.next_sign_time !== '未设定'" class="status-text">
-                    下次签到: {{ statusInfo.next_sign_time }}
-                </span>
-            </a-space>
-            <a-space>
-                <a-button type="primary" :loading="signLoading" :disabled="disabled" @click="handleSignNow">
-                    <ThunderboltOutlined /> 立即签到
-                </a-button>
-                <a-button :loading="refreshLoading" :disabled="disabled" @click="handleRefreshInfo">
-                    <ReloadOutlined /> 刷新信息
-                </a-button>
-            </a-space>
+        <!-- ==================== 签到结果 / 状态 ==================== -->
+        <div class="form-section result-section">
+            <div class="section-header">
+                <h3>签到结果</h3>
+                <a-space>
+                    <a-button :loading="signLoading" :disabled="disabled" @click="handleSignNow" type="primary">
+                        <ThunderboltOutlined /> 立即签到
+                    </a-button>
+                    <a-button :loading="refreshLoading" :disabled="disabled" @click="handleRefreshInfo">
+                        <ReloadOutlined /> 刷新信息
+                    </a-button>
+                </a-space>
+            </div>
+
+            <a-row :gutter="16" class="status-cards">
+                <a-col :span="6">
+                    <div class="status-card">
+                        <div class="status-card-label">运行状态</div>
+                        <a-tag v-if="statusTag" :color="statusTag.color">{{ statusTag.text }}</a-tag>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="status-card">
+                        <div class="status-card-label">上次签到</div>
+                        <div class="status-card-value">{{ formatTime(statusInfo.last_sign_time) }}</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="status-card">
+                        <div class="status-card-label">下次签到</div>
+                        <div class="status-card-value">{{ formatTime(statusInfo.next_sign_time) }}</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="status-card">
+                        <div class="status-card-label">账号数</div>
+                        <div class="status-card-value">
+                            {{ form.mihoyoAccounts.length + form.kuroAccounts.length + form.sklandAccounts.length }}
+                        </div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <!-- 签到报告 -->
+            <div v-if="statusInfo.last_report" class="sign-report">
+                <div class="report-label">最近签到报告</div>
+                <pre class="report-content">{{ statusInfo.last_report }}</pre>
+            </div>
+
+            <!-- 签到明细 -->
+            <div v-if="statusInfo.results && statusInfo.results.length" class="sign-details">
+                <div class="report-label">签到明细</div>
+                <a-table :data-source="statusInfo.results" :columns="[
+                    { title: '平台', dataIndex: 'provider', width: 80 },
+                    { title: '游戏', dataIndex: 'game', width: 120 },
+                    { title: '账号', dataIndex: 'account' },
+                    { title: '状态', dataIndex: 'success', width: 80, customRender: ({text}: any) => text ? '✅ 成功' : '❌ 失败' },
+                    { title: '说明', dataIndex: 'message' },
+                ]" :pagination="false" size="small" />
+            </div>
+
+            <!-- 游戏信息 -->
+            <div v-if="statusInfo.infos && statusInfo.infos.length" class="sign-details">
+                <div class="report-label">游戏信息</div>
+                <a-table :data-source="statusInfo.infos" :columns="[
+                    { title: '游戏', dataIndex: 'game', width: 120 },
+                    { title: '账号', dataIndex: 'account' },
+                    { title: '体力', customRender: ({record}: any) => record.fields?.stamina != null ? `${record.fields.stamina}/${record.fields.stamina_max}` : '--' },
+                    { title: '日常', customRender: ({record}: any) => record.fields?.daily_task_done != null ? `${record.fields.daily_task_done}/${record.fields.daily_task_total}` : '--' },
+                ]" :pagination="false" size="small" />
+            </div>
         </div>
 
         <!-- ==================== 基础设置 ==================== -->
@@ -143,19 +231,24 @@ onMounted(() => {
                 <a-col :span="8">
                     <div class="form-item">
                         <label>启用签到</label>
-                        <a-switch v-model:checked="form.enabled" :disabled="disabled" />
+                        <a-select v-model:value="form.enabled" :disabled="disabled" style="width:100%">
+                            <a-select-option :value="true">启用</a-select-option>
+                            <a-select-option :value="false">禁用</a-select-option>
+                        </a-select>
                     </div>
                 </a-col>
                 <a-col :span="8">
                     <div class="form-item">
                         <label>签到窗口起点</label>
-                        <a-input v-model:value="form.signWindowStart" placeholder="HH:MM" :disabled="disabled" />
+                        <a-time-picker v-model:value="signWindowStartDT" format="HH:mm" :minute-step="5"
+                            style="width:100%" :disabled="disabled" @change="onStartChange" />
                     </div>
                 </a-col>
                 <a-col :span="8">
                     <div class="form-item">
                         <label>签到窗口终点</label>
-                        <a-input v-model:value="form.signWindowEnd" placeholder="HH:MM" :disabled="disabled" />
+                        <a-time-picker v-model:value="signWindowEndDT" format="HH:mm" :minute-step="5"
+                            style="width:100%" :disabled="disabled" @change="onEndChange" />
                     </div>
                 </a-col>
                 <a-col :span="8">
@@ -167,13 +260,19 @@ onMounted(() => {
                 <a-col :span="8">
                     <div class="form-item">
                         <label>签到后显示信息</label>
-                        <a-switch v-model:checked="form.showInfoAfterSign" :disabled="disabled" />
+                        <a-select v-model:value="form.showInfoAfterSign" :disabled="disabled" style="width:100%">
+                            <a-select-option :value="true">启用</a-select-option>
+                            <a-select-option :value="false">禁用</a-select-option>
+                        </a-select>
                     </div>
                 </a-col>
                 <a-col :span="8">
                     <div class="form-item">
                         <label>获取活动日历</label>
-                        <a-switch v-model:checked="form.fetchEvents" :disabled="disabled" />
+                        <a-select v-model:value="form.fetchEvents" :disabled="disabled" style="width:100%">
+                            <a-select-option :value="true">启用</a-select-option>
+                            <a-select-option :value="false">禁用</a-select-option>
+                        </a-select>
                     </div>
                 </a-col>
             </a-row>
@@ -183,8 +282,8 @@ onMounted(() => {
         <div class="form-section">
             <div class="section-header"><h3>账号管理</h3></div>
 
-            <!-- 米游社 -->
             <a-collapse ghost>
+                <!-- 米游社 -->
                 <a-collapse-panel key="mihoyo">
                     <template #header>
                         <span class="platform-label">米游社</span>
@@ -199,7 +298,7 @@ onMounted(() => {
                         </div>
                         <div class="form-item">
                             <label>Cookie</label>
-                            <a-input-password v-model:value="acc.cookie" placeholder="粘贴完整 Cookie（包含 ltoken/ltuid/cookie_token 等字段）" :disabled="disabled" />
+                            <a-input-password v-model:value="acc.cookie" placeholder="粘贴完整 Cookie（包含 ltoken/ltuid/cookie_token 等字段）" :disabled="disabled" visibilityToggle />
                         </div>
                         <a-space class="account-toggles">
                             <a-checkbox v-model:checked="acc.enable_genshin" :disabled="disabled">原神</a-checkbox>
@@ -229,7 +328,7 @@ onMounted(() => {
                         </div>
                         <div class="form-item">
                             <label>Token</label>
-                            <a-input-password v-model:value="acc.token" placeholder="粘贴库街区 Token（登录后抓包获取）" :disabled="disabled" />
+                            <a-input-password v-model:value="acc.token" placeholder="粘贴库街区 Token（登录后抓包获取）" :disabled="disabled" visibilityToggle />
                         </div>
                         <a-space class="account-toggles">
                             <a-checkbox v-model:checked="acc.enable_kuro_bbs" :disabled="disabled">库街区社区</a-checkbox>
@@ -256,7 +355,7 @@ onMounted(() => {
                         </div>
                         <div class="form-item">
                             <label>Token</label>
-                            <a-input-password v-model:value="acc.token" placeholder="粘贴森空岛 Token" :disabled="disabled" />
+                            <a-input-password v-model:value="acc.token" placeholder="粘贴森空岛 Token" :disabled="disabled" visibilityToggle />
                         </div>
                         <a-space class="account-toggles">
                             <a-checkbox v-model:checked="acc.enable_arknights" :disabled="disabled">明日方舟</a-checkbox>
@@ -290,18 +389,11 @@ onMounted(() => {
 .tool-intro .card-header { font-size: 15px; font-weight: 600; color: var(--ant-color-primary); margin-bottom: 4px; }
 .tool-intro .intro-text { margin: 0; font-size: 13px; color: var(--ant-color-text-secondary); }
 
-.status-bar {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 16px; background: var(--ant-color-bg-container);
-    border: 1px solid var(--ant-color-border); border-radius: 8px; margin-bottom: 16px;
-}
-.status-text { color: var(--ant-color-text-secondary); font-size: 13px; }
-
 .form-section {
     background: var(--ant-color-bg-container); border: 1px solid var(--ant-color-border);
     border-radius: 8px; padding: 16px 20px; margin-bottom: 12px;
 }
-.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
 
 .form-item { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
@@ -315,6 +407,24 @@ onMounted(() => {
 }
 .account-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .account-toggles { margin-top: 4px; }
+
+.result-section { border-color: var(--ant-color-primary); border-width: 1px; }
+.status-cards { margin-bottom: 12px; }
+.status-card {
+    background: var(--ant-color-fill-secondary); border-radius: 6px;
+    padding: 10px 14px; text-align: center;
+}
+.status-card-label { font-size: 12px; color: var(--ant-color-text-tertiary); margin-bottom: 4px; }
+.status-card-value { font-size: 14px; font-weight: 600; color: var(--ant-color-text); }
+
+.sign-report { margin-top: 12px; }
+.report-label { font-size: 13px; font-weight: 500; color: var(--ant-color-text-secondary); margin-bottom: 6px; }
+.report-content {
+    background: var(--ant-color-fill-secondary); border-radius: 6px;
+    padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap;
+    max-height: 300px; overflow-y: auto; margin: 0;
+}
+.sign-details { margin-top: 12px; }
 
 .save-bar { display: flex; justify-content: center; padding: 16px 0; }
 </style>
