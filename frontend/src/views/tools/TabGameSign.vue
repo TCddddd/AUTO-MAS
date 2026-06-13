@@ -21,7 +21,7 @@ const statusTag = useStatusTag(
     createStatusTag('未配置', 'default')
 )
 
-// 本地编辑状态 - 深拷贝配置
+// ==================== 本地编辑状态 ====================
 const form = reactive({
     enabled: false,
     signWindowStart: '08:00',
@@ -29,16 +29,13 @@ const form = reactive({
     timeoutSeconds: 20,
     showInfoAfterSign: true,
     fetchEvents: true,
-    mihoyoAccounts: [] as string[],
-    kuroAccounts: [] as string[],
-    sklandAccounts: [] as string[],
+    // 账号列表 — 每个元素为 { alias, token/cookie, ... }
+    mihoyoAccounts: [] as Record<string, any>[],
+    kuroAccounts: [] as Record<string, any>[],
+    sklandAccounts: [] as Record<string, any>[],
 })
 
-const loadStatus = async () => {
-    const s = await getStatus()
-    Object.assign(statusInfo, s)
-}
-
+// ==================== 数据加载 ====================
 const loadForm = async () => {
     try {
         const config = await getConfig()
@@ -48,23 +45,22 @@ const loadForm = async () => {
         form.timeoutSeconds = config.TimeoutSeconds ?? 20
         form.showInfoAfterSign = config.ShowInfoAfterSign ?? true
         form.fetchEvents = config.FetchEvents ?? true
-        form.mihoyoAccounts = (config.MihoyoAccounts || []).map((a: any) => a.cookie || '')
-        form.kuroAccounts = (config.KuroAccounts || []).map((a: any) => a.token || '')
-        form.sklandAccounts = (config.SklandAccounts || []).map((a: any) => a.token || '')
+        form.mihoyoAccounts = (config.MihoyoAccounts || []).map((a: any) => ({ ...a }))
+        form.kuroAccounts = (config.KuroAccounts || []).map((a: any) => ({ ...a }))
+        form.sklandAccounts = (config.SklandAccounts || []).map((a: any) => ({ ...a }))
     } catch {
-        // 使用 props.config 的默认值
-        form.enabled = props.config.Enabled ?? false
-        form.signWindowStart = props.config.SignWindowStart ?? '08:00'
-        form.signWindowEnd = props.config.SignWindowEnd ?? '22:00'
-        form.timeoutSeconds = props.config.TimeoutSeconds ?? 20
-        form.showInfoAfterSign = props.config.ShowInfoAfterSign ?? true
-        form.fetchEvents = props.config.FetchEvents ?? true
-        form.mihoyoAccounts = (props.config.MihoyoAccounts || []).map((a: any) => a.cookie || '')
-        form.kuroAccounts = (props.config.KuroAccounts || []).map((a: any) => a.token || '')
-        form.sklandAccounts = (props.config.SklandAccounts || []).map((a: any) => a.token || '')
+        form.mihoyoAccounts = []
+        form.kuroAccounts = []
+        form.sklandAccounts = []
     }
 }
 
+const loadStatus = async () => {
+    const s = await getStatus()
+    Object.assign(statusInfo, s)
+}
+
+// ==================== 保存 ====================
 const handleSave = async () => {
     saveLoading.value = true
     try {
@@ -75,9 +71,9 @@ const handleSave = async () => {
             TimeoutSeconds: form.timeoutSeconds,
             ShowInfoAfterSign: form.showInfoAfterSign,
             FetchEvents: form.fetchEvents,
-            MihoyoAccounts: form.mihoyoAccounts.filter(s => s.trim()).map(cookie => ({ cookie, alias: '', enabled: true, enable_genshin: true, enable_starrail: true, enable_zzz: false, enable_honkai3: false, enable_bbs_tasks: true })),
-            KuroAccounts: form.kuroAccounts.filter(s => s.trim()).map(token => ({ token, alias: '', enabled: true, enable_kuro_bbs: true, enable_wuwa: true })),
-            SklandAccounts: form.sklandAccounts.filter(s => s.trim()).map(token => ({ token, alias: '', enabled: true, enable_arknights: true, enable_bbs: true })),
+            MihoyoAccounts: form.mihoyoAccounts.filter(a => (a.cookie || '').trim()),
+            KuroAccounts: form.kuroAccounts.filter(a => (a.token || '').trim()),
+            SklandAccounts: form.sklandAccounts.filter(a => (a.token || '').trim()),
         }
         await updateConfig(data)
         await loadStatus()
@@ -86,26 +82,27 @@ const handleSave = async () => {
     }
 }
 
+// ==================== 操作 ====================
 const handleSignNow = async () => {
     signLoading.value = true
-    try {
-        await signNow()
-    } finally {
-        signLoading.value = false
-    }
+    try { await signNow() } finally { signLoading.value = false }
 }
 
 const handleRefreshInfo = async () => {
     refreshLoading.value = true
-    try {
-        await refreshInfo()
-    } finally {
-        refreshLoading.value = false
-    }
+    try { await refreshInfo() } finally { refreshLoading.value = false }
 }
 
-const addAccount = (list: string[]) => { list.push('') }
-const removeAccount = (list: string[], index: number) => { list.splice(index, 1) }
+// ==================== 账号管理 ====================
+const addMihoyo = () => {
+    form.mihoyoAccounts.push({ alias: '', cookie: '', enable_genshin: true, enable_starrail: true, enable_zzz: false, enable_honkai3: false, enable_bbs_tasks: true })
+}
+const addKuro = () => {
+    form.kuroAccounts.push({ alias: '', token: '', enable_kuro_bbs: true, enable_wuwa: true })
+}
+const addSkland = () => {
+    form.sklandAccounts.push({ alias: '', token: '', enable_arknights: true, enable_bbs: true })
+}
 
 onMounted(() => {
     loadForm()
@@ -139,7 +136,7 @@ onMounted(() => {
             </a-space>
         </div>
 
-        <!-- 基础设置 -->
+        <!-- ==================== 基础设置 ==================== -->
         <div class="form-section">
             <div class="section-header"><h3>基础设置</h3></div>
             <a-row :gutter="24">
@@ -182,55 +179,98 @@ onMounted(() => {
             </a-row>
         </div>
 
-        <!-- 米游社账号 -->
+        <!-- ==================== 账号管理 ==================== -->
         <div class="form-section">
-            <div class="section-header"><h3>米游社账号</h3><span class="hint">公共查询cookie，允许添加多个</span></div>
-            <div v-for="(cookie, idx) in form.mihoyoAccounts" :key="idx" class="account-row">
-                <a-textarea v-model:value="form.mihoyoAccounts[idx]" :rows="2"
-                    placeholder="粘贴完整 Cookie（包含 ltoken / ltuid / cookie_token / account_id 等字段）"
-                    :disabled="disabled" />
-                <a-button type="text" danger :disabled="disabled" @click="removeAccount(form.mihoyoAccounts, idx)">
-                    <DeleteOutlined />
-                </a-button>
-            </div>
-            <a-button type="link" :disabled="disabled" @click="addAccount(form.mihoyoAccounts)">
-                <PlusOutlined /> 添加 Cookie
-            </a-button>
+            <div class="section-header"><h3>账号管理</h3></div>
+
+            <!-- 米游社 -->
+            <a-collapse ghost>
+                <a-collapse-panel key="mihoyo">
+                    <template #header>
+                        <span class="platform-label">米游社</span>
+                        <a-tag v-if="form.mihoyoAccounts.length" color="blue" style="margin-left:8px">{{ form.mihoyoAccounts.length }}</a-tag>
+                    </template>
+                    <div v-for="(acc, idx) in form.mihoyoAccounts" :key="idx" class="account-card">
+                        <div class="account-header">
+                            <a-input v-model:value="acc.alias" placeholder="账号别名（可选）" style="width:200px" :disabled="disabled" />
+                            <a-button type="text" danger :disabled="disabled" @click="form.mihoyoAccounts.splice(idx, 1)">
+                                <DeleteOutlined /> 删除
+                            </a-button>
+                        </div>
+                        <div class="form-item">
+                            <label>Cookie</label>
+                            <a-input-password v-model:value="acc.cookie" placeholder="粘贴完整 Cookie（包含 ltoken/ltuid/cookie_token 等字段）" :disabled="disabled" />
+                        </div>
+                        <a-space class="account-toggles">
+                            <a-checkbox v-model:checked="acc.enable_genshin" :disabled="disabled">原神</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_starrail" :disabled="disabled">崩铁</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_zzz" :disabled="disabled">绝区零</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_honkai3" :disabled="disabled">崩坏3</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_bbs_tasks" :disabled="disabled">米游币任务</a-checkbox>
+                        </a-space>
+                    </div>
+                    <a-button type="link" :disabled="disabled" @click="addMihoyo">
+                        <PlusOutlined /> 添加账号
+                    </a-button>
+                </a-collapse-panel>
+
+                <!-- 库洛 -->
+                <a-collapse-panel key="kuro">
+                    <template #header>
+                        <span class="platform-label">库洛</span>
+                        <a-tag v-if="form.kuroAccounts.length" color="blue" style="margin-left:8px">{{ form.kuroAccounts.length }}</a-tag>
+                    </template>
+                    <div v-for="(acc, idx) in form.kuroAccounts" :key="idx" class="account-card">
+                        <div class="account-header">
+                            <a-input v-model:value="acc.alias" placeholder="账号别名（可选）" style="width:200px" :disabled="disabled" />
+                            <a-button type="text" danger :disabled="disabled" @click="form.kuroAccounts.splice(idx, 1)">
+                                <DeleteOutlined /> 删除
+                            </a-button>
+                        </div>
+                        <div class="form-item">
+                            <label>Token</label>
+                            <a-input-password v-model:value="acc.token" placeholder="粘贴库街区 Token（登录后抓包获取）" :disabled="disabled" />
+                        </div>
+                        <a-space class="account-toggles">
+                            <a-checkbox v-model:checked="acc.enable_kuro_bbs" :disabled="disabled">库街区社区</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_wuwa" :disabled="disabled">鸣潮</a-checkbox>
+                        </a-space>
+                    </div>
+                    <a-button type="link" :disabled="disabled" @click="addKuro">
+                        <PlusOutlined /> 添加账号
+                    </a-button>
+                </a-collapse-panel>
+
+                <!-- 森空岛 -->
+                <a-collapse-panel key="skland">
+                    <template #header>
+                        <span class="platform-label">森空岛</span>
+                        <a-tag v-if="form.sklandAccounts.length" color="blue" style="margin-left:8px">{{ form.sklandAccounts.length }}</a-tag>
+                    </template>
+                    <div v-for="(acc, idx) in form.sklandAccounts" :key="idx" class="account-card">
+                        <div class="account-header">
+                            <a-input v-model:value="acc.alias" placeholder="账号别名（可选）" style="width:200px" :disabled="disabled" />
+                            <a-button type="text" danger :disabled="disabled" @click="form.sklandAccounts.splice(idx, 1)">
+                                <DeleteOutlined /> 删除
+                            </a-button>
+                        </div>
+                        <div class="form-item">
+                            <label>Token</label>
+                            <a-input-password v-model:value="acc.token" placeholder="粘贴森空岛 Token" :disabled="disabled" />
+                        </div>
+                        <a-space class="account-toggles">
+                            <a-checkbox v-model:checked="acc.enable_arknights" :disabled="disabled">明日方舟</a-checkbox>
+                            <a-checkbox v-model:checked="acc.enable_bbs" :disabled="disabled">森空岛社区</a-checkbox>
+                        </a-space>
+                    </div>
+                    <a-button type="link" :disabled="disabled" @click="addSkland">
+                        <PlusOutlined /> 添加账号
+                    </a-button>
+                </a-collapse-panel>
+            </a-collapse>
         </div>
 
-        <!-- 库洛账号 -->
-        <div class="form-section">
-            <div class="section-header"><h3>库洛账号</h3><span class="hint">库街区 token，允许添加多个</span></div>
-            <div v-for="(token, idx) in form.kuroAccounts" :key="idx" class="account-row">
-                <a-input v-model:value="form.kuroAccounts[idx]"
-                    placeholder="粘贴库街区 Token（登录后抓包获取）"
-                    :disabled="disabled" />
-                <a-button type="text" danger :disabled="disabled" @click="removeAccount(form.kuroAccounts, idx)">
-                    <DeleteOutlined />
-                </a-button>
-            </div>
-            <a-button type="link" :disabled="disabled" @click="addAccount(form.kuroAccounts)">
-                <PlusOutlined /> 添加 Token
-            </a-button>
-        </div>
-
-        <!-- 森空岛账号 -->
-        <div class="form-section">
-            <div class="section-header"><h3>森空岛账号</h3><span class="hint">Hypergryph 通行证 token，允许添加多个</span></div>
-            <div v-for="(token, idx) in form.sklandAccounts" :key="idx" class="account-row">
-                <a-input v-model:value="form.sklandAccounts[idx]"
-                    placeholder="粘贴森空岛 Token"
-                    :disabled="disabled" />
-                <a-button type="text" danger :disabled="disabled" @click="removeAccount(form.sklandAccounts, idx)">
-                    <DeleteOutlined />
-                </a-button>
-            </div>
-            <a-button type="link" :disabled="disabled" @click="addAccount(form.sklandAccounts)">
-                <PlusOutlined /> 添加 Token
-            </a-button>
-        </div>
-
-        <!-- 保存按钮 -->
+        <!-- ==================== 保存 ==================== -->
         <div class="save-bar">
             <a-button type="primary" size="large" :loading="saveLoading" :disabled="disabled" @click="handleSave">
                 <SaveOutlined /> 保存
@@ -247,81 +287,34 @@ onMounted(() => {
     padding: 16px 20px;
     margin-bottom: 16px;
 }
-.tool-intro .card-header {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--ant-color-primary);
-    margin-bottom: 4px;
-}
-.tool-intro .intro-text {
-    margin: 0;
-    font-size: 13px;
-    color: var(--ant-color-text-secondary);
-}
+.tool-intro .card-header { font-size: 15px; font-weight: 600; color: var(--ant-color-primary); margin-bottom: 4px; }
+.tool-intro .intro-text { margin: 0; font-size: 13px; color: var(--ant-color-text-secondary); }
 
 .status-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: var(--ant-color-bg-container);
-    border: 1px solid var(--ant-color-border);
-    border-radius: 8px;
-    margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; background: var(--ant-color-bg-container);
+    border: 1px solid var(--ant-color-border); border-radius: 8px; margin-bottom: 16px;
 }
-.status-text {
-    color: var(--ant-color-text-secondary);
-    font-size: 13px;
-}
+.status-text { color: var(--ant-color-text-secondary); font-size: 13px; }
 
 .form-section {
-    background: var(--ant-color-bg-container);
-    border: 1px solid var(--ant-color-border);
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    background: var(--ant-color-bg-container); border: 1px solid var(--ant-color-border);
+    border-radius: 8px; padding: 16px 20px; margin-bottom: 12px;
 }
-.section-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-}
-.section-header h3 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-}
-.section-header .hint {
-    font-size: 12px;
-    color: var(--ant-color-text-tertiary);
-}
+.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.section-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
 
-.form-item {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-.form-item label {
-    font-weight: 500;
-    font-size: 13px;
-    color: var(--ant-color-text);
-}
+.form-item { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.form-item label { font-weight: 500; font-size: 13px; color: var(--ant-color-text); }
 
-.account-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-.account-row .ant-btn {
-    margin-top: 4px;
-}
+.platform-label { font-weight: 600; font-size: 14px; }
 
-.save-bar {
-    display: flex;
-    justify-content: center;
-    padding: 16px 0;
+.account-card {
+    border: 1px solid var(--ant-color-border-secondary); border-radius: 6px;
+    padding: 12px 16px; margin-bottom: 8px;
 }
+.account-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.account-toggles { margin-top: 4px; }
+
+.save-bar { display: flex; justify-content: center; padding: 16px 0; }
 </style>

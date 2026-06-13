@@ -2204,13 +2204,13 @@ class ToolsConfig(ConfigBase):
             "GameSign", "FetchEvents", True, BoolValidator()
         )
         self.GameSign_MihoyoAccounts = ConfigItem(
-            "GameSign", "MihoyoAccounts", "[ ]", JSONValidator(list)
+            "GameSign", "MihoyoAccounts", "", EncryptValidator()
         )
         self.GameSign_KuroAccounts = ConfigItem(
-            "GameSign", "KuroAccounts", "[ ]", JSONValidator(list)
+            "GameSign", "KuroAccounts", "", EncryptValidator()
         )
         self.GameSign_SklandAccounts = ConfigItem(
-            "GameSign", "SklandAccounts", "[ ]", JSONValidator(list)
+            "GameSign", "SklandAccounts", "", EncryptValidator()
         )
         self.GameSign_NotifyFormat = ConfigItem(
             "GameSign", "NotifyFormat", "text"

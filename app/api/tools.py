@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body
 from app.core import Config
 from app.models.schema import ToolsGetOut, ToolsConfig, OutBase, ToolsUpdateIn
+from app.utils.security import dpapi_decrypt
 import json
 
 router = APIRouter(prefix="/api/tools", tags=["工具设置"])
@@ -26,6 +27,20 @@ def _parse_json_strings(data: dict) -> dict:
                 parsed[key] = value
         result[group] = parsed
     return result
+
+
+def _decrypt_encrypted_strings(data: dict) -> dict:
+    """对 EncryptValidator 管理的字段进行解密，避免 model_dump() 密文被二次加密。"""
+    ENCRYPTED_KEYS = {"MihoyoAccounts", "KuroAccounts", "SklandAccounts"}
+    for group, items in data.items():
+        if isinstance(items, dict):
+            for key in items:
+                if key in ENCRYPTED_KEYS and isinstance(items[key], str) and items[key]:
+                    try:
+                        items[key] = dpapi_decrypt(items[key])
+                    except Exception:
+                        pass
+    return data
 
 
 @router.post(
@@ -63,6 +78,7 @@ async def update_tools(script: ToolsUpdateIn = Body(...)) -> OutBase:
 
     try:
         data = script.data.model_dump(exclude_unset=True)
+        data = _decrypt_encrypted_strings(data)
         for group, items in data.items():
             if isinstance(items, dict):
                 for key, value in items.items():
