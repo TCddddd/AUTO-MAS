@@ -85,33 +85,33 @@ const gameSignStatusTag = useStatusTag(
 // 轮询定时器
 let pollTimer: NodeJS.Timeout | null = null
 
-    // 仅更新状态（不影响编辑状态）
-    const updateStatus = async () => {
-        // 如果下拉框正在打开，跳过更新避免干扰用户操作
-        if (isSelectOpen.value) {
-            return
-        }
-        try {
-            // 静默模式：不更新 loading 状态，避免子组件按钮闪烁
-            const data = await getTools(true)
-            if (data.ArknightsPC?.Status) {
-                // 只更新 toolsConfig 的状态，不更新 editingConfig
-                // 这样轮询只影响状态标签显示，不会触发编辑表单重新渲染
-                toolsConfig.ArknightsPC!.Status = data.ArknightsPC.Status
-            }
-        } catch (error) {
-            // 静默失败，不影响用户操作
-        }
-        // 更新 GameSign 状态标签
-        try {
-            const signStatus = await getGameSignStatus()
-            if (signStatus?.status) {
-                gameSignStatus.value = signStatus.status
-            }
-        } catch {
-            // 静默失败
-        }
+// 仅更新状态（不影响编辑状态）
+const updateStatus = async () => {
+    // 如果下拉框正在打开，跳过更新避免干扰用户操作
+    if (isSelectOpen.value) {
+        return
     }
+    try {
+        // 静默模式：不更新 loading 状态，避免子组件按钮闪烁
+        const data = await getTools(true)
+        if (data.ArknightsPC?.Status) {
+            // 只更新 toolsConfig 的状态，不更新 editingConfig
+            // 这样轮询只影响状态标签显示，不会触发编辑表单重新渲染
+            toolsConfig.ArknightsPC!.Status = data.ArknightsPC.Status
+        }
+    } catch (error) {
+        // 静默失败，不影响用户操作
+    }
+    // 更新 GameSign 状态标签
+    try {
+        const signStatus = await getGameSignStatus()
+        if (signStatus?.status) {
+            gameSignStatus.value = signStatus.status
+        }
+    } catch {
+        // 静默失败
+    }
+}
 
 // 启动状态轮询
 const startStatusPolling = () => {
