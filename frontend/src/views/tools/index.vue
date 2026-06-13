@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import type { ToolsConfig } from '@/api'
 import { useToolsApi } from '@/composables/useToolsApi'
+import { useGameSignApi } from '@/composables/useGameSignApi'
 import { useStatusTag, createStatusTag } from '@/composables/useStatusTag'
 import TabArknightsPC from './TabArknightsPC.vue'
 import TabGameSign from './TabGameSign.vue'
-import type { GameSignConfig } from '@/composables/useGameSignApi'
 const logger = window.electronAPI.getLogger('工具')
 
 const { loading, getTools, updateTools } = useToolsApi()
+const { getStatus: getGameSignStatus } = useGameSignApi()
 
 // 活动标签
 const activeKey = ref('arknightspc')
@@ -74,31 +75,43 @@ const arknightsPCStatusTag = useStatusTag(
     createStatusTag('未启用', 'default')
 )
 
+// GameSign 状态：从 API 获取
+const gameSignStatus = ref<string>('未知')
 const gameSignStatusTag = useStatusTag(
-    () => toolsConfig.GameSign?.Status,
-    createStatusTag('未配置', 'default')
+    () => gameSignStatus.value,
+    createStatusTag('未知', 'default')
 )
 
 // 轮询定时器
 let pollTimer: NodeJS.Timeout | null = null
 
-// 仅更新状态（不影响编辑状态）
-const updateStatus = async () => {
-    // 如果下拉框正在打开，跳过更新避免干扰用户操作
-    if (isSelectOpen.value) {
-        return
-    }
-    try {
-        const data = await getTools()
-        if (data.ArknightsPC?.Status) {
-            // 只更新 toolsConfig 的状态，不更新 editingConfig
-            // 这样轮询只影响状态标签显示，不会触发编辑表单重新渲染
-            toolsConfig.ArknightsPC!.Status = data.ArknightsPC.Status
+    // 仅更新状态（不影响编辑状态）
+    const updateStatus = async () => {
+        // 如果下拉框正在打开，跳过更新避免干扰用户操作
+        if (isSelectOpen.value) {
+            return
         }
-    } catch (error) {
-        // 静默失败，不影响用户操作
+        try {
+            // 静默模式：不更新 loading 状态，避免子组件按钮闪烁
+            const data = await getTools(true)
+            if (data.ArknightsPC?.Status) {
+                // 只更新 toolsConfig 的状态，不更新 editingConfig
+                // 这样轮询只影响状态标签显示，不会触发编辑表单重新渲染
+                toolsConfig.ArknightsPC!.Status = data.ArknightsPC.Status
+            }
+        } catch (error) {
+            // 静默失败，不影响用户操作
+        }
+        // 更新 GameSign 状态标签
+        try {
+            const signStatus = await getGameSignStatus()
+            if (signStatus?.status) {
+                gameSignStatus.value = signStatus.status
+            }
+        } catch {
+            // 静默失败
+        }
     }
-}
 
 // 启动状态轮询
 const startStatusPolling = () => {
@@ -151,8 +164,11 @@ const loadTools = async () => {
                 NotifyFormat: 'text',
             }
         }
+        // 保留 GameSign（子组件独立管理）
+        const savedGameSign = editingConfig.GameSign
         Object.assign(toolsConfig, data)
         Object.assign(editingConfig, JSON.parse(JSON.stringify(data)))
+        if (savedGameSign) editingConfig.GameSign = savedGameSign
         logger.info('工具加载完成')
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
@@ -246,6 +262,15 @@ useEventListener(document, 'keydown', handleKeyDown)
 // 生命周期：加载配置并启动轮询
 onMounted(async () => {
     await loadTools()
+    // 初始获取 GameSign 状态
+    try {
+        const signStatus = await getGameSignStatus()
+        if (signStatus?.status) {
+            gameSignStatus.value = signStatus.status
+        }
+    } catch {
+        // 静默失败
+    }
     startStatusPolling()
 })
 
@@ -287,8 +312,7 @@ onUnmounted(() => {
                             </a-tag>
                         </span>
                     </template>
-                    <TabGameSign v-if="editingConfig.GameSign" :config="editingConfig.GameSign"
-                        :disabled="loading" :on-field-change="handleFieldChange" />
+                    <TabGameSign v-show="activeKey === 'gamesign'" :disabled="loading" />
                 </a-tab-pane>
             </a-tabs>
         </div>

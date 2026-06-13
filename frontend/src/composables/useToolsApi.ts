@@ -8,9 +8,10 @@ export function useToolsApi() {
 
     /**
      * 获取工具
+     * @param silent 静默模式：不更新 loading 状态，用于后台轮询
      */
-    const getTools = async (): Promise<ToolsConfig> => {
-        loading.value = true
+    const getTools = async (silent = false): Promise<ToolsConfig> => {
+        if (!silent) loading.value = true
         try {
             logger.info('请求获取工具配置...')
             const response = await Service.getToolsApiToolsGetPost()
@@ -22,10 +23,10 @@ export function useToolsApi() {
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error)
             logger.error(`获取工具失败: ${errorMsg}`)
-            message.error('获取工具失败')
+            if (!silent) message.error('获取工具失败')
             throw error
         } finally {
-            loading.value = false
+            if (!silent) loading.value = false
         }
     }
 

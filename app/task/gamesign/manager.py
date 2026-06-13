@@ -9,12 +9,20 @@ from typing import Any, Dict, List, Optional
 
 from app.utils import get_logger
 from app.core import Config
+from app.services import Notify
 from app.models.schema import GameSignAccount
 from .providers import SignResult, GameInfo, MihoyoProvider, KuroProvider, SklandProvider
 from .runner import run_all, render_report
 from .schema import GameSignConfig
 
 logger = get_logger("游戏签到")
+
+# 后端游戏名 → 显示名
+_GAME_NAME_MAP = {
+    "森空岛社区": "明日方舟终末地",
+    "库街区社区": "战双帕弥什",
+}
+_PROVIDER_LABEL = {"mihoyo": "米游社", "kuro": "库街区", "skland": "森空岛"}
 
 
 def _safe_json_list(val: str) -> list:
@@ -26,6 +34,14 @@ def _safe_json_list(val: str) -> list:
         return result if isinstance(result, list) else []
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def _group_results(results: List[SignResult]) -> Dict[str, List[SignResult]]:
+    """按 provider 分组签到结果。"""
+    groups: Dict[str, List[SignResult]] = {}
+    for r in results:
+        groups.setdefault(r.provider, []).append(r)
+    return groups
 
 
 def _clean_accounts(accounts: list) -> list:
@@ -189,7 +205,54 @@ class GameSignManager:
         logger.info(f"签到完成: 新签 {sum(1 for r in sign_results if r.success and not r.already_signed)}, "
                      f"已签 {sum(1 for r in sign_results if r.already_signed)}, "
                      f"失败 {sum(1 for r in sign_results if not r.success)}")
+
+        # 通知转发
+        await self._push_notifications(sign_results)
+
         return report
+
+    async def _push_notifications(self, results: List[SignResult]) -> None:
+        """通过所有已启用渠道推送签到结果通知。"""
+        if not results:
+            return
+
+        # 构建通知文本，参考 Skland-Sign-In 风格
+        lines: List[str] = ["📅 游戏社区签到", ""]
+        for provider_key, items in _group_results(results).items():
+            label = _PROVIDER_LABEL.get(provider_key, provider_key)
+            lines.append(f"🌈 {label}:")
+            for r in items:
+                game = _GAME_NAME_MAP.get(r.game, r.game)
+                if r.already_signed:
+                    icon, status = "✅", "已签"
+                    detail = ""
+                elif r.success:
+                    icon, status = "✅", "成功"
+                    detail = f" ({r.reward})" if r.reward else ""
+                else:
+                    icon, status = "❌", "失败"
+                    detail = f" ({r.message})" if r.message else ""
+                lines.append(f"{icon} {game}: {status}{detail}")
+            lines.append("")
+
+        title = "游戏社区签到"
+        message_text = "\n".join(lines).strip()
+
+        try:
+            if Config.get("Notify", "IfSendMail"):
+                await Notify.send_mail("网页", title, message_text, Config.get("Notify", "ToAddress"))
+
+            if Config.get("Notify", "IfServerChan"):
+                await Notify.ServerChanPush(title, message_text, Config.get("Notify", "ServerChanKey"))
+
+            for webhook in Config.Notify_CustomWebhooks.values():
+                await Notify.WebhookPush(title, message_text, webhook)
+
+            if Config.get("Notify", "IfKoishiSupport"):
+                await Notify.send_koishi(message_text)
+
+        except Exception as e:
+            logger.error(f"推送签到通知失败: {e}")
 
     async def refresh_info(self) -> List[GameInfo]:
         """刷新游戏信息（不执行签到）。"""
