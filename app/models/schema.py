@@ -128,9 +128,46 @@ class ToolsConfig_ArknightsPC(BaseModel):
     Status: str | None = Field(default=None, description="工具状态 Tag")
 
 
+class GameSignAccount(BaseModel):
+    """游戏签到账号。"""
+
+    alias: str = Field(default="", description="账号别名")
+    cookie: str | None = Field(default=None, description="Cookie (米哈游)")
+    token: str | None = Field(default=None, description="Token (库洛/森空岛)")
+    cred: str = Field(default="", description="Cred (森空岛可选)")
+    enabled: bool = Field(default=True, description="是否启用")
+    enable_genshin: bool = Field(default=True, description="启用原神签到")
+    enable_starrail: bool = Field(default=True, description="启用崩铁签到")
+    enable_zzz: bool = Field(default=False, description="启用绝区零签到")
+    enable_honkai3: bool = Field(default=False, description="启用崩坏3签到")
+    enable_kuro_bbs: bool = Field(default=True, description="启用库洛社区签到")
+    enable_wuwa: bool = Field(default=True, description="启用鸣潮签到")
+    enable_arknights: bool = Field(default=True, description="启用明日方舟签到")
+    enable_bbs: bool = Field(default=True, description="启用森空岛社区签到")
+
+
+class ToolsConfig_GameSign(BaseModel):
+    """游戏社区签到工具配置。"""
+
+    Enabled: bool | None = Field(default=None, description="是否启用签到")
+    SignWindowStart: str | None = Field(default=None, description="签到窗口起点 (HH:MM)")
+    SignWindowEnd: str | None = Field(default=None, description="签到窗口终点 (HH:MM)")
+    TimeoutSeconds: int | None = Field(default=None, description="请求超时(秒)")
+    ShowInfoAfterSign: bool | None = Field(default=None, description="签到后显示信息")
+    WidgetRefreshSeconds: int | None = Field(default=None, description="信息刷新间隔(秒)")
+    FetchEvents: bool | None = Field(default=None, description="获取活动日历")
+    MihoyoAccounts: list[GameSignAccount] | None = Field(default=None, description="米游社账号")
+    KuroAccounts: list[GameSignAccount] | None = Field(default=None, description="库洛账号")
+    SklandAccounts: list[GameSignAccount] | None = Field(default=None, description="森空岛账号")
+    NotifyFormat: str | None = Field(default=None, description="通知格式")
+
+
 class ToolsConfig(BaseModel):
     ArknightsPC: ToolsConfig_ArknightsPC | None = Field(
         default=None, description="明日方舟PC工具配置"
+    )
+    GameSign: ToolsConfig_GameSign | None = Field(
+        default=None, description="游戏社区签到配置"
     )
 
 

@@ -84,6 +84,15 @@ def main():
             await ArknightWin32Toolkit.init()
             await MainTimer.start()
 
+            # 初始化游戏社区签到
+            try:
+                from app.task.gamesign.manager import GameSignManager
+                gamesign_manager = GameSignManager.get_instance()
+                await gamesign_manager.initialize()
+                logger.info("游戏社区签到模块已初始化")
+            except Exception as e:
+                logger.error(f"游戏社区签到初始化失败: {e}")
+
             # 初始化 Koishi 系统客户端（如果已启用）
             if Config.get("Notify", "IfKoishiSupport"):
                 from app.utils.websocket import ws_client_manager
@@ -104,6 +113,13 @@ def main():
             yield
 
             await TaskManager.stop_task("ALL")
+
+            # 关闭游戏社区签到
+            try:
+                from app.task.gamesign.manager import GameSignManager
+                await GameSignManager.get_instance().shutdown()
+            except Exception:
+                pass
 
             await MainTimer.stop()
 
@@ -128,6 +144,7 @@ def main():
             update_router,
             ocr_router,
             ws_debug_router,
+            gamesign_router,
         )
 
         app = FastAPI(
@@ -158,6 +175,7 @@ def main():
         app.include_router(update_router)
         app.include_router(ocr_router)
         app.include_router(ws_debug_router)
+        app.include_router(gamesign_router)
 
         app.mount(
             "/api/res/materials",

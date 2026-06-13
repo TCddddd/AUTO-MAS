@@ -5,6 +5,8 @@ import type { ToolsConfig } from '@/api'
 import { useToolsApi } from '@/composables/useToolsApi'
 import { useStatusTag, createStatusTag } from '@/composables/useStatusTag'
 import TabArknightsPC from './TabArknightsPC.vue'
+import TabGameSign from './TabGameSign.vue'
+import type { GameSignConfig } from '@/composables/useGameSignApi'
 const logger = window.electronAPI.getLogger('工具')
 
 const { loading, getTools, updateTools } = useToolsApi()
@@ -24,6 +26,19 @@ const toolsConfig = reactive<ToolsConfig>({
         AnotherQuitKey: 'space',
         Status: '-',
     },
+    GameSign: {
+        Enabled: false,
+        SignWindowStart: '08:00',
+        SignWindowEnd: '22:00',
+        TimeoutSeconds: 20,
+        ShowInfoAfterSign: true,
+        WidgetRefreshSeconds: 300,
+        FetchEvents: true,
+        MihoyoAccounts: [],
+        KuroAccounts: [],
+        SklandAccounts: [],
+        NotifyFormat: 'text',
+    },
 })
 
 // 本地编辑状态
@@ -38,12 +53,30 @@ const editingConfig = reactive<ToolsConfig>({
         AnotherQuitKey: 'space',
         Status: '-',
     },
+    GameSign: {
+        Enabled: false,
+        SignWindowStart: '08:00',
+        SignWindowEnd: '22:00',
+        TimeoutSeconds: 20,
+        ShowInfoAfterSign: true,
+        WidgetRefreshSeconds: 300,
+        FetchEvents: true,
+        MihoyoAccounts: [],
+        KuroAccounts: [],
+        SklandAccounts: [],
+        NotifyFormat: 'text',
+    },
 })
 
 // 使用通用的状态标签解析
 const arknightsPCStatusTag = useStatusTag(
     () => toolsConfig.ArknightsPC?.Status,
     createStatusTag('未启用', 'default')
+)
+
+const gameSignStatusTag = useStatusTag(
+    () => toolsConfig.GameSign?.Status,
+    createStatusTag('未配置', 'default')
 )
 
 // 轮询定时器
@@ -100,6 +133,22 @@ const loadTools = async () => {
                 NextFrameKey: 'f',
                 AnotherQuitKey: 'space',
                 Status: '-',
+            }
+        }
+        // 确保 GameSign 配置存在
+        if (!data.GameSign) {
+            data.GameSign = {
+                Enabled: false,
+                SignWindowStart: '08:00',
+                SignWindowEnd: '22:00',
+                TimeoutSeconds: 20,
+                ShowInfoAfterSign: true,
+                WidgetRefreshSeconds: 300,
+                FetchEvents: true,
+                MihoyoAccounts: [],
+                KuroAccounts: [],
+                SklandAccounts: [],
+                NotifyFormat: 'text',
             }
         }
         Object.assign(toolsConfig, data)
@@ -227,6 +276,19 @@ onUnmounted(() => {
                         :disabled="loading" :on-field-change="handleFieldChange"
                         :recording-key-field="recordingKeyField" :start-record-key="startRecordKey"
                         :stop-record-key="stopRecordKey" :on-select-visible-change="handleSelectVisibleChange" />
+                </a-tab-pane>
+                <a-tab-pane key="gamesign">
+                    <template #tab>
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <span>游戏社区签到</span>
+                            <a-tag v-if="gameSignStatusTag" :color="gameSignStatusTag.color"
+                                style="margin: 0; font-size: 12px;">
+                                {{ gameSignStatusTag.text }}
+                            </a-tag>
+                        </span>
+                    </template>
+                    <TabGameSign v-if="editingConfig.GameSign" :config="editingConfig.GameSign"
+                        :disabled="loading" :on-field-change="handleFieldChange" />
                 </a-tab-pane>
             </a-tabs>
         </div>

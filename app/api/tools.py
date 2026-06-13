@@ -1,31 +1,31 @@
-#   AUTO-MAS: A Multi-Script, Multi-Config Management and Automation Software
-#   Copyright © 2024-2025 DLmaster361
-#   Copyright © 2025 MoeSnowyFox
-#   Copyright © 2025-2026 AUTO-MAS Team
-
-#   This file is part of AUTO-MAS.
-
-#   AUTO-MAS is free software: you can redistribute it and/or modify
-#   it under the terms of the GNU Affero General Public License as
-#   published by the Free Software Foundation, either version 3 of
-#   the License, or (at your option) any later version.
-
-#   AUTO-MAS is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty
-#   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
-#   the GNU Affero General Public License for more details.
-
-#   You should have received a copy of the GNU Affero General Public License
-#   along with AUTO-MAS. If not, see <https://www.gnu.org/licenses/>.
-
-#   Contact: DLmaster_361@163.com
-
-
 from fastapi import APIRouter, Body
 from app.core import Config
 from app.models.schema import ToolsGetOut, ToolsConfig, OutBase, ToolsUpdateIn
+import json
 
 router = APIRouter(prefix="/api/tools", tags=["工具设置"])
+
+
+def _parse_json_strings(data: dict) -> dict:
+    """将 ConfigItem 中存储为 JSON 字符串的列表值解析为实际列表。"""
+    result = {}
+    for group, items in data.items():
+        parsed = {}
+        for key, value in items.items():
+            if isinstance(value, str):
+                if value.startswith("["):
+                    try:
+                        parsed[key] = json.loads(value)
+                    except (json.JSONDecodeError, TypeError):
+                        parsed[key] = []
+                elif value == "":
+                    parsed[key] = []
+                else:
+                    parsed[key] = value
+            else:
+                parsed[key] = value
+        result[group] = parsed
+    return result
 
 
 @router.post(
@@ -40,6 +40,7 @@ async def get_tools() -> ToolsGetOut:
 
     try:
         data = await Config.get_tools()
+        data = _parse_json_strings(data)
     except Exception as e:
         return ToolsGetOut(
             code=500,
@@ -62,6 +63,11 @@ async def update_tools(script: ToolsUpdateIn = Body(...)) -> OutBase:
 
     try:
         data = script.data.model_dump(exclude_unset=True)
+        for group, items in data.items():
+            if isinstance(items, dict):
+                for key, value in items.items():
+                    if isinstance(value, list):
+                        items[key] = json.dumps(value, ensure_ascii=False)
         await Config.update_tools(data)
 
     except Exception as e:

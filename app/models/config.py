@@ -2181,6 +2181,41 @@ class ToolsConfig(ConfigBase):
         self.arknights_pc_running = False
         self.arknights_pc_get_connected: Callable[[], bool] = lambda: False
 
+        # === 游戏社区签到 ===
+        self.GameSign_Enabled = ConfigItem(
+            "GameSign", "Enabled", False, BoolValidator()
+        )
+        self.GameSign_SignWindowStart = ConfigItem(
+            "GameSign", "SignWindowStart", "08:00"
+        )
+        self.GameSign_SignWindowEnd = ConfigItem(
+            "GameSign", "SignWindowEnd", "22:00"
+        )
+        self.GameSign_TimeoutSeconds = ConfigItem(
+            "GameSign", "TimeoutSeconds", 20, RangeValidator(5, 120)
+        )
+        self.GameSign_ShowInfoAfterSign = ConfigItem(
+            "GameSign", "ShowInfoAfterSign", True, BoolValidator()
+        )
+        self.GameSign_WidgetRefreshSeconds = ConfigItem(
+            "GameSign", "WidgetRefreshSeconds", 300, RangeValidator(60, 3600)
+        )
+        self.GameSign_FetchEvents = ConfigItem(
+            "GameSign", "FetchEvents", True, BoolValidator()
+        )
+        self.GameSign_MihoyoAccounts = ConfigItem(
+            "GameSign", "MihoyoAccounts", "[ ]", JSONValidator(list)
+        )
+        self.GameSign_KuroAccounts = ConfigItem(
+            "GameSign", "KuroAccounts", "[ ]", JSONValidator(list)
+        )
+        self.GameSign_SklandAccounts = ConfigItem(
+            "GameSign", "SklandAccounts", "[ ]", JSONValidator(list)
+        )
+        self.GameSign_NotifyFormat = ConfigItem(
+            "GameSign", "NotifyFormat", "text"
+        )
+
         super().__init__()
 
     @property
