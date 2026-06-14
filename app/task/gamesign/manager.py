@@ -19,7 +19,7 @@ logger = get_logger("游戏签到")
 
 # 后端游戏名 → 显示名
 _GAME_NAME_MAP = {
-    "森空岛社区": "明日方舟终末地",
+    "森空岛社区": "终末地",
     "库街区社区": "战双帕弥什",
 }
 _PROVIDER_LABEL = {"mihoyo": "米游社", "kuro": "库街区", "skland": "森空岛"}
@@ -216,23 +216,45 @@ class GameSignManager:
         if not results:
             return
 
-        # 构建通知文本，参考 Skland-Sign-In 风格
+        # 构建通知文本，按账号分组显示
         lines: List[str] = ["📅 游戏社区签到", ""]
+
+        # 按 provider 分组
         for provider_key, items in _group_results(results).items():
             label = _PROVIDER_LABEL.get(provider_key, provider_key)
             lines.append(f"🌈 {label}:")
+
+            # 按账号昵称分组（account 格式: "别名/昵称(uid)" 或 "别名/昵称"）
+            account_groups: Dict[str, List[SignResult]] = {}
             for r in items:
-                game = _GAME_NAME_MAP.get(r.game, r.game)
-                if r.already_signed:
-                    icon, status = "✅", "已签"
-                    detail = ""
-                elif r.success:
-                    icon, status = "✅", "成功"
-                    detail = f" ({r.reward})" if r.reward else ""
+                # 提取昵称部分
+                account_str = r.account or "未知"
+                if "/" in account_str:
+                    # 格式: "别名/昵称(uid)" → 取昵称部分
+                    parts = account_str.split("/", 1)
+                    nickname_part = parts[1]
+                    # 去掉 uid 部分: "昵称(uid)" → "昵称"
+                    if "(" in nickname_part:
+                        nickname_part = nickname_part.split("(")[0]
+                    nickname = nickname_part.strip()
                 else:
-                    icon, status = "❌", "失败"
-                    detail = f" ({r.message})" if r.message else ""
-                lines.append(f"{icon} {game}: {status}{detail}")
+                    nickname = account_str.strip()
+                account_groups.setdefault(nickname, []).append(r)
+
+            for nickname, sign_results in account_groups.items():
+                lines.append(f"  No.{nickname}:")
+                for r in sign_results:
+                    game = _GAME_NAME_MAP.get(r.game, r.game)
+                    if r.already_signed:
+                        icon, status = "✅", "已签"
+                        detail = ""
+                    elif r.success:
+                        icon, status = "✅", "成功"
+                        detail = f" ({r.reward})" if r.reward else ""
+                    else:
+                        icon, status = "❌", "失败"
+                        detail = f" ({r.message})" if r.message else ""
+                    lines.append(f"    {icon} {game}: {status}{detail}")
             lines.append("")
 
         title = "游戏社区签到"

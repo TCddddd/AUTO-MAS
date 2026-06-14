@@ -158,6 +158,75 @@ class SklandProvider(BaseProvider):
             ))
         return results
 
+    async def sign_endfield(self, cred: str, token: str, alias: str) -> List[SignResult]:
+        """终末地签到，支持多角色"""
+        bindings = await self._get_binding(cred, token)
+        results: List[SignResult] = []
+        ef_apps: List[Dict[str, Any]] = []
+        for app in bindings:
+            if app.get("appCode") == "endfield":
+                ef_apps.extend(app.get("bindingList", []) or [])
+        if not ef_apps:
+            results.append(SignResult(
+                provider=self.name, game="终末地", account=alias,
+                success=False, message="未绑定终末地角色",
+            ))
+            return results
+        path = "/web/v1/game/endfield/attendance"
+        for binding in ef_apps:
+            roles = binding.get("roles", [])
+            if not roles:
+                results.append(SignResult(
+                    provider=self.name, game="终末地",
+                    account=f"{alias}/{binding.get('nickName','')}",
+                    success=False, message="没有角色数据",
+                ))
+                continue
+            for role in roles:
+                role_nickname = role.get("nickname", binding.get("nickName", ""))
+                role_id = role.get("roleId", "")
+                server_id = role.get("serverId", "")
+                headers = self._sign_headers(cred, token, path)
+                headers["Content-Type"] = "application/json"
+                headers["sk-game-role"] = f"3_{role_id}_{server_id}"
+                headers["referer"] = "https://game.skland.com/"
+                headers["origin"] = "https://game.skland.com/"
+                try:
+                    r = await self.client.post(
+                        SK_HOST + path, headers=headers, json={},
+                    )
+                    data = r.json()
+                except Exception as e:
+                    results.append(SignResult(
+                        provider=self.name, game="终末地",
+                        account=f"{alias}/{role_nickname}",
+                        success=False, message=f"请求异常: {e}",
+                    ))
+                    continue
+                code = data.get("code")
+                msg = data.get("message", "")
+                already = code == 10001 or "已签到" in msg or "重复" in msg
+                success = code == 0 or already
+                reward = ""
+                d = data.get("data") or {}
+                award_ids = d.get("awardIds", [])
+                resource_map = d.get("resourceInfoMap", {})
+                if award_ids and resource_map:
+                    parts = []
+                    for award in award_ids:
+                        aid = award.get("id", "")
+                        if aid in resource_map:
+                            info = resource_map[aid]
+                            parts.append(f"{info.get('name','')}x{info.get('count',1)}")
+                    reward = ", ".join(parts)
+                results.append(SignResult(
+                    provider=self.name, game="终末地",
+                    account=f"{alias}/{role_nickname}",
+                    success=success, message=msg or "OK", already_signed=already,
+                    reward=reward, extra={"raw": data},
+                ))
+        return results
+
     async def sign_skland_bbs(self, cred: str, token: str, alias: str) -> SignResult:
         path = "/api/v1/score/checkin"
         body = {"gameId": 0}
@@ -264,6 +333,7 @@ class SklandProvider(BaseProvider):
                 results.append(await self.sign_skland_bbs(cred, token, alias))
             if enable_arknights:
                 results.extend(await self.sign_arknights(cred, token, alias))
+                results.extend(await self.sign_endfield(cred, token, alias))
         return results
 
     async def fetch_info(self) -> List[GameInfo]:

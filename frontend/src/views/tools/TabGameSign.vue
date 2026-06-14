@@ -37,7 +37,7 @@ const onEndChange = (time: any) => { if (time) form.signWindowEnd = time.format(
 // ==================== 平台卡片（账号标签 + 签到奖励） ====================
 // 后端游戏名 → 前端显示名
 const gameNameMap: Record<string, string> = {
-    '森空岛社区': '明日方舟终末地',
+    '森空岛社区': '终末地',
     '库街区社区': '战双帕弥什',
 }
 const mapGameName = (name: string) => gameNameMap[name] || name
@@ -46,15 +46,37 @@ const platformCards = computed(() => {
     const platforms = [
         { key: 'mihoyo', name: '米游社', desc: '原神 / 崩铁 / 绝区零 / 崩坏3', color: '#1677ff' },
         { key: 'kuro', name: '库街区', desc: '鸣潮 / 战双帕弥什', color: '#722ed1' },
-        { key: 'skland', name: '森空岛', desc: '明日方舟 / 明日方舟终末地', color: '#13c2c2' },
+        { key: 'skland', name: '森空岛', desc: '明日方舟 / 终末地', color: '#13c2c2' },
     ]
     return platforms.map(p => {
         const results = statusInfo.results.filter((r: any) => r.provider === p.key)
-        // 规范化账号名：取 / 或 # 前的部分作为用户标识
-        const normalizeName = (name: string) => {
-            if (!name) return '未知'
-            const idx = name.search(/[/#]/)
-            return idx > 0 ? name.slice(0, idx) : name
+        // 提取账号昵称：account 格式 "别名/昵称(uid)" → "昵称"
+        const extractNickname = (account: string) => {
+            if (!account) return '未知'
+            if (account.includes('/')) {
+                const afterSlash = account.split('/', 1)[1] || ''
+                const nickname = afterSlash.split('(')[0].trim()
+                return nickname || account
+            }
+            return account
+        }
+        // 按昵称分组签到结果
+        const accountMap = new Map<string, { signed: boolean; rewards: string[]; games: string[] }>()
+        for (const r of results) {
+            const nickname = extractNickname(r.account || '未知')
+            const displayName = mapGameName(r.game || '')
+            const existing = accountMap.get(nickname)
+            if (existing) {
+                existing.signed = existing.signed || r.success || r.already_signed
+                if (r.reward && !existing.rewards.includes(r.reward)) existing.rewards.push(r.reward)
+                if (displayName && !existing.games.includes(displayName)) existing.games.push(displayName)
+            } else {
+                accountMap.set(nickname, {
+                    signed: r.success || r.already_signed,
+                    rewards: r.reward ? [r.reward] : [],
+                    games: displayName ? [displayName] : [],
+                })
+            }
         }
         // 按账号分组签到结果
         const accountMap = new Map<string, { signed: boolean; rewards: string[]; games: string[] }>()
