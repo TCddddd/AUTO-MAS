@@ -37,7 +37,6 @@ const onEndChange = (time: any) => { if (time) form.signWindowEnd = time.format(
 // ==================== 平台卡片（账号标签 + 签到奖励） ====================
 // 后端游戏名 → 前端显示名
 const gameNameMap: Record<string, string> = {
-    '森空岛社区': '终末地',
     '库街区社区': '战双帕弥什',
 }
 const mapGameName = (name: string) => gameNameMap[name] || name
@@ -50,28 +49,24 @@ const platformCards = computed(() => {
     ]
     return platforms.map(p => {
         const results = statusInfo.results.filter((r: any) => r.provider === p.key)
-        // 提取账号昵称：account 格式 "别名/昵称(uid)" → "昵称"
-        const extractNickname = (account: string) => {
+        const extractAlias = (account: string) => {
             if (!account) return '未知'
             if (account.includes('/')) {
-                const afterSlash = account.split('/', 1)[1] || ''
-                const nickname = afterSlash.split('(')[0].trim()
-                return nickname || account
+                return account.split('/', 1)[0].trim()
             }
             return account
         }
-        // 按昵称分组签到结果
         const accountMap = new Map<string, { signed: boolean; rewards: string[]; games: string[] }>()
         for (const r of results) {
-            const nickname = extractNickname(r.account || '未知')
+            const alias = extractAlias(r.account || '未知')
             const displayName = mapGameName(r.game || '')
-            const existing = accountMap.get(nickname)
+            const existing = accountMap.get(alias)
             if (existing) {
                 existing.signed = existing.signed || r.success || r.already_signed
                 if (r.reward && !existing.rewards.includes(r.reward)) existing.rewards.push(r.reward)
                 if (displayName && !existing.games.includes(displayName)) existing.games.push(displayName)
             } else {
-                accountMap.set(nickname, {
+                accountMap.set(alias, {
                     signed: r.success || r.already_signed,
                     rewards: r.reward ? [r.reward] : [],
                     games: displayName ? [displayName] : [],
@@ -155,7 +150,7 @@ const handleRefreshInfo = async () => {
 // ==================== 账号管理 ====================
 const addMihoyo = () => form.mihoyoAccounts.push({ alias: '', cookie: '', enable_genshin: true, enable_starrail: true, enable_zzz: false, enable_honkai3: false, enable_bbs_tasks: true })
 const addKuro = () => form.kuroAccounts.push({ alias: '', token: '', enable_kuro_bbs: true, enable_wuwa: true })
-const addSkland = () => form.sklandAccounts.push({ alias: '', token: '', enable_arknights: true, enable_bbs: true })
+const addSkland = () => form.sklandAccounts.push({ alias: '', token: '', enable_arknights: true })
 
 const formatTime = (t: string) => {
     if (!t) return '--'

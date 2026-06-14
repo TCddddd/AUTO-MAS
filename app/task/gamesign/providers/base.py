@@ -26,7 +26,7 @@ class SignResult:
     Attributes:
         provider: 平台标识 (mihoyo/kuro/skland)。
         game: 游戏名称。
-        account: 账号别名/uid。
+        account: 统一格式 "别名/标识"（如 "别名/昵称(uid)"、"别名/社区"）。
         success: 是否成功。
         message: 附带消息。
         reward: 本次签到奖励文字。
@@ -59,7 +59,7 @@ class GameInfo:
     Attributes:
         provider: 平台标识。
         game: 游戏名称。
-        account: 账号别名。
+        account: 统一格式 "别名/标识"（如 "别名/昵称(uid)"）。
         fields: 异构字段字典，前端按需渲染。
     """
 

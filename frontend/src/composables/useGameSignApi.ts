@@ -18,7 +18,6 @@ export interface GameSignAccount {
     enable_kuro_bbs?: boolean
     enable_wuwa?: boolean
     enable_arknights?: boolean
-    enable_bbs?: boolean
 }
 
 export interface GameSignConfig {

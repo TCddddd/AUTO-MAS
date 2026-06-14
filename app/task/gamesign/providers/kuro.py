@@ -59,7 +59,7 @@ class KuroProvider(BaseProvider):
         already = "已签到" in msg or code == 1505
         success = code == 200 or already
         return SignResult(
-            provider=self.name, game="库街区社区", account=alias,
+            provider=self.name, game="库街区社区", account=f"{alias}/社区",
             success=success, message=msg or "OK",
             already_signed=already,
             reward=str((data.get("data") or {}).get("gold", "")) if success else "",
@@ -70,7 +70,7 @@ class KuroProvider(BaseProvider):
         role = await self._get_role(token, GID_WUWA)
         if not role:
             return SignResult(
-                provider=self.name, game="鸣潮", account=alias,
+                provider=self.name, game="鸣潮", account=f"{alias}/鸣潮",
                 success=False, message="未绑定鸣潮角色，token 可能失效",
             )
         body = {
@@ -120,7 +120,7 @@ class KuroProvider(BaseProvider):
         events = await self._fetch_wuwa_events(token)
         return GameInfo(
             provider=self.name, game="鸣潮",
-            account=f"{alias}/{role.get('roleName','')}",
+            account=f"{alias}/{role.get('roleName','')}({role.get('roleId','')})",
             fields={
                 "stamina": energy.get("cur"),
                 "stamina_max": energy.get("total"),

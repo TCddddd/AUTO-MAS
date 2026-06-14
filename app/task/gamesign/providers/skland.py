@@ -43,7 +43,7 @@ class SklandProvider(BaseProvider):
         return None
 
     async def _cred_from_code(self, code: str) -> Optional[Dict[str, str]]:
-        url = SK_HOST + "/api/v1/user/auth/generate_cred_by_code"
+        url = SK_HOST + "/web/v1/user/auth/generate_cred_by_code"
         try:
             r = await self.client.post(url, json={"code": code, "kind": 1})
             data = r.json()
@@ -60,10 +60,10 @@ class SklandProvider(BaseProvider):
     def _sign_headers(self, cred: str, token: str, url_path: str, body: Any = "") -> Dict[str, str]:
         ts = str(int(time.time()) - 2)
         headers_for_sign = {
-            "platform": "1",
+            "platform": "3",
             "timestamp": ts,
             "dId": self._dev_id,
-            "vName": "1.5.1",
+            "vName": "1.0.0",
         }
         header_ca_str = json.dumps(headers_for_sign, separators=(",", ":"))
         if isinstance(body, (dict, list)):
@@ -76,12 +76,14 @@ class SklandProvider(BaseProvider):
         return {
             "cred": cred,
             "sign": sign,
-            "platform": "1",
+            "platform": "3",
             "timestamp": ts,
             "dId": self._dev_id,
-            "vName": "1.5.1",
-            "User-Agent": "Skland/1.5.1 (com.hypergryph.skland; build:100501001; Android 13)",
-            "Content-Type": "application/json; charset=utf-8",
+            "vName": "1.0.0",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-A5560 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/101.0.4951.61 Safari/537.36; SKLand/1.52.1",
+            "Accept-Encoding": "gzip",
+            "Connection": "close",
+            "X-Requested-With": "com.hypergryph.skland",
         }
 
     async def _get_binding(self, cred: str, token: str) -> List[Dict[str, Any]]:
@@ -118,13 +120,13 @@ class SklandProvider(BaseProvider):
                 ark_apps.extend(app.get("bindingList", []) or [])
         if not ark_apps:
             results.append(SignResult(
-                provider=self.name, game="明日方舟", account=alias,
+                provider=self.name, game="明日方舟", account=f"{alias}/明日方舟",
                 success=False, message="未绑定明日方舟角色",
             ))
             return results
         path = "/api/v1/game/attendance"
         for ch in ark_apps:
-            body = {"uid": ch.get("uid", ""), "gameId": 1}
+            body = {"gameId": ch.get("gameId", 1), "uid": ch.get("uid", "")}
             try:
                 r = await self.client.post(
                     SK_HOST + path,
@@ -135,7 +137,7 @@ class SklandProvider(BaseProvider):
             except Exception as e:
                 results.append(SignResult(
                     provider=self.name, game="明日方舟",
-                    account=f"{alias}/{ch.get('nickName','')}",
+                    account=f"{alias}/{ch.get('nickName','')}({ch.get('uid','')})",
                     success=False, message=f"请求异常: {e}",
                 ))
                 continue
@@ -168,7 +170,7 @@ class SklandProvider(BaseProvider):
                 ef_apps.extend(app.get("bindingList", []) or [])
         if not ef_apps:
             results.append(SignResult(
-                provider=self.name, game="终末地", account=alias,
+                provider=self.name, game="终末地", account=f"{alias}/终末地",
                 success=False, message="未绑定终末地角色",
             ))
             return results
@@ -178,7 +180,7 @@ class SklandProvider(BaseProvider):
             if not roles:
                 results.append(SignResult(
                     provider=self.name, game="终末地",
-                    account=f"{alias}/{binding.get('nickName','')}",
+                    account=f"{alias}/终末地({binding.get('nickName','')})",
                     success=False, message="没有角色数据",
                 ))
                 continue
@@ -193,13 +195,13 @@ class SklandProvider(BaseProvider):
                 headers["origin"] = "https://game.skland.com/"
                 try:
                     r = await self.client.post(
-                        SK_HOST + path, headers=headers, json={},
+                        SK_HOST + path, headers=headers,
                     )
                     data = r.json()
                 except Exception as e:
                     results.append(SignResult(
                         provider=self.name, game="终末地",
-                        account=f"{alias}/{role_nickname}",
+                        account=f"{alias}/{role_nickname}({role_id})",
                         success=False, message=f"请求异常: {e}",
                     ))
                     continue
@@ -213,44 +215,19 @@ class SklandProvider(BaseProvider):
                 resource_map = d.get("resourceInfoMap", {})
                 if award_ids and resource_map:
                     parts = []
-                    for award in award_ids:
-                        aid = award.get("id", "")
-                        if aid in resource_map:
-                            info = resource_map[aid]
+                    for aid in award_ids:
+                        raw_id = aid.get("id", "") if isinstance(aid, dict) else str(aid)
+                        if raw_id in resource_map:
+                            info = resource_map[raw_id]
                             parts.append(f"{info.get('name','')}x{info.get('count',1)}")
                     reward = ", ".join(parts)
                 results.append(SignResult(
                     provider=self.name, game="终末地",
-                    account=f"{alias}/{role_nickname}",
+                    account=f"{alias}/{role_nickname}({role_id})",
                     success=success, message=msg or "OK", already_signed=already,
                     reward=reward, extra={"raw": data},
                 ))
         return results
-
-    async def sign_skland_bbs(self, cred: str, token: str, alias: str) -> SignResult:
-        path = "/api/v1/score/checkin"
-        body = {"gameId": 0}
-        try:
-            r = await self.client.post(
-                SK_HOST + path,
-                headers=self._sign_headers(cred, token, path, body),
-                json=body,
-            )
-            data = r.json()
-        except Exception as e:
-            return SignResult(
-                provider=self.name, game="森空岛社区", account=alias,
-                success=False, message=f"请求异常: {e}",
-            )
-        code = data.get("code")
-        msg = data.get("message", "")
-        already = code in (10001, 10003) or "重复" in msg or "已" in msg
-        success = code == 0 or already
-        return SignResult(
-            provider=self.name, game="森空岛社区", account=alias,
-            success=success, message=msg or "OK", already_signed=already,
-            extra={"raw": data},
-        )
 
     async def fetch_arknights_info(self, cred: str, token: str, alias: str) -> List[GameInfo]:
         bindings = await self._get_binding(cred, token)
@@ -279,7 +256,7 @@ class SklandProvider(BaseProvider):
                 events = await self._fetch_arknights_events()
                 infos.append(GameInfo(
                     provider=self.name, game="明日方舟",
-                    account=f"{alias}/{ch.get('nickName','')}",
+                    account=f"{alias}/{ch.get('nickName','')}({ch.get('uid','')})",
                     fields={
                         "stamina": ap.get("current"),
                         "stamina_max": ap.get("max"),
@@ -322,15 +299,12 @@ class SklandProvider(BaseProvider):
             cred_pair = await self._ensure_cred(acc)
             if not cred_pair:
                 results.append(SignResult(
-                    provider=self.name, game="森空岛", account=alias,
+                    provider=self.name, game="森空岛", account=f"{alias}/认证",
                     success=False, message="获取 cred 失败 (token 失效或未提供)",
                 ))
                 continue
             cred, token = cred_pair["cred"], cred_pair["token"]
-            enable_bbs = acc.get("enable_bbs", True) if isinstance(acc, dict) else getattr(acc, "enable_bbs", True)
             enable_arknights = acc.get("enable_arknights", True) if isinstance(acc, dict) else getattr(acc, "enable_arknights", True)
-            if enable_bbs:
-                results.append(await self.sign_skland_bbs(cred, token, alias))
             if enable_arknights:
                 results.extend(await self.sign_arknights(cred, token, alias))
                 results.extend(await self.sign_endfield(cred, token, alias))

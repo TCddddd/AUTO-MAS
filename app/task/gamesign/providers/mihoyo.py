@@ -129,13 +129,15 @@ class MihoyoProvider(BaseProvider):
             "uid": role.get("game_uid", ""),
         }
         headers = self._headers(cookie, g["game_biz"])
+        role_nickname = role.get("nickname", "")
+        role_uid = role.get("game_uid", "")
         try:
             r = await self.client.post(url, json=body, headers=headers)
             data = r.json()
         except Exception as e:
             return SignResult(
                 provider=self.name, game=g["name"],
-                account=role.get("nickname") or role.get("game_uid", ""),
+                account=f"{role_nickname}({role_uid})",
                 success=False, message=f"请求异常: {e}",
             )
 
@@ -150,9 +152,9 @@ class MihoyoProvider(BaseProvider):
 
         return SignResult(
             provider=self.name, game=g["name"],
-            account=role.get("nickname") or role.get("game_uid", ""),
+            account=f"{role_nickname}({role_uid})",
             success=success, message=msg, already_signed=already,
-            extra={"raw": data, "uid": role.get("game_uid", "")},
+            extra={"raw": data, "uid": role_uid},
         )
 
     async def sign_all(self) -> List[SignResult]:
@@ -178,7 +180,7 @@ class MihoyoProvider(BaseProvider):
                 roles = await self._get_roles(cookie, GAMES[gk]["game_biz"])
                 if not roles:
                     results.append(SignResult(
-                        provider=self.name, game=GAMES[gk]["name"], account=alias,
+                        provider=self.name, game=GAMES[gk]["name"], account=f"{alias}/角色",
                         success=False, message="未查询到绑定角色 (Cookie 可能失效)",
                     ))
                     continue
@@ -243,7 +245,7 @@ class MihoyoProvider(BaseProvider):
                     events_cache = await self._fetch_genshin_events(cookie, role)
                 infos.append(GameInfo(
                     provider=self.name, game="原神",
-                    account=f"{alias}/{role.get('nickname','')}",
+                    account=f"{alias}/{role.get('nickname','')}({role.get('game_uid','')})",
                     fields={
                         "stamina": d.get("current_resin"),
                         "stamina_max": d.get("max_resin"),

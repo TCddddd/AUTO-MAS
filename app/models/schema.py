@@ -143,7 +143,6 @@ class GameSignAccount(BaseModel):
     enable_kuro_bbs: bool = Field(default=True, description="启用库洛社区签到")
     enable_wuwa: bool = Field(default=True, description="启用鸣潮签到")
     enable_arknights: bool = Field(default=True, description="启用明日方舟签到")
-    enable_bbs: bool = Field(default=True, description="启用森空岛社区签到")
 
 
 class ToolsConfig_GameSign(BaseModel):

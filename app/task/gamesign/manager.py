@@ -19,7 +19,6 @@ logger = get_logger("游戏签到")
 
 # 后端游戏名 → 显示名
 _GAME_NAME_MAP = {
-    "森空岛社区": "终末地",
     "库街区社区": "战双帕弥什",
 }
 _PROVIDER_LABEL = {"mihoyo": "米游社", "kuro": "库街区", "skland": "森空岛"}
@@ -216,62 +215,96 @@ class GameSignManager:
         if not results:
             return
 
-        # 构建通知文本，按账号分组显示
-        lines: List[str] = ["📅 游戏社区签到", ""]
+        # 按 provider → 账号别名 分组
+        grouped: Dict[str, Dict[str, List[SignResult]]] = {}
+        for r in results:
+            provider = r.provider
+            account_str = r.account or "未知"
+            alias = account_str.split("/", 1)[0].strip() if "/" in account_str else account_str.strip()
+            grouped.setdefault(provider, {}).setdefault(alias, []).append(r)
 
-        # 按 provider 分组
-        for provider_key, items in _group_results(results).items():
+        title = "游戏社区签到"
+
+        # === 纯文本版本（ServerChan / Webhook / Koishi）===
+        text_lines: List[str] = ["📅 游戏社区签到", ""]
+        for provider_key, accounts in grouped.items():
             label = _PROVIDER_LABEL.get(provider_key, provider_key)
-            lines.append(f"🌈 {label}:")
-
-            # 按账号昵称分组（account 格式: "别名/昵称(uid)" 或 "别名/昵称"）
-            account_groups: Dict[str, List[SignResult]] = {}
-            for r in items:
-                # 提取昵称部分
-                account_str = r.account or "未知"
-                if "/" in account_str:
-                    # 格式: "别名/昵称(uid)" → 取昵称部分
-                    parts = account_str.split("/", 1)
-                    nickname_part = parts[1]
-                    # 去掉 uid 部分: "昵称(uid)" → "昵称"
-                    if "(" in nickname_part:
-                        nickname_part = nickname_part.split("(")[0]
-                    nickname = nickname_part.strip()
-                else:
-                    nickname = account_str.strip()
-                account_groups.setdefault(nickname, []).append(r)
-
-            for nickname, sign_results in account_groups.items():
-                lines.append(f"  No.{nickname}:")
+            text_lines.append(f"🌈 {label}:")
+            for alias, sign_results in accounts.items():
+                text_lines.append(f"  No.{alias}:")
                 for r in sign_results:
                     game = _GAME_NAME_MAP.get(r.game, r.game)
                     if r.already_signed:
-                        icon, status = "✅", "已签"
-                        detail = ""
+                        text_lines.append(f"    ✅ {game}: 已签")
                     elif r.success:
-                        icon, status = "✅", "成功"
                         detail = f" ({r.reward})" if r.reward else ""
+                        text_lines.append(f"    ✅ {game}: 成功{detail}")
                     else:
-                        icon, status = "❌", "失败"
                         detail = f" ({r.message})" if r.message else ""
-                    lines.append(f"    {icon} {game}: {status}{detail}")
-            lines.append("")
+                        text_lines.append(f"    ❌ {game}: 失败{detail}")
+                text_lines.append("")
+        text_lines.append("AUTO-MAS 敬上")
+        text_content = "\n".join(text_lines).strip()
 
-        title = "游戏社区签到"
-        message_text = "\n".join(lines).strip()
+        # === HTML 版本（邮件）===
+        html_parts: List[str] = [
+            '<div style="font-family:-apple-system,Segoe UI,Roboto,PingFang SC,Microsoft Yahei,sans-serif;'
+            'max-width:520px;margin:0 auto;padding:20px;background:#fff;border-radius:12px;'
+            'box-shadow:0 2px 12px rgba(0,0,0,.08)">',
+            '<div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:16px">'
+            '📅 游戏社区签到</div>',
+        ]
+        idx = 0
+        for provider_key, accounts in grouped.items():
+            label = _PROVIDER_LABEL.get(provider_key, provider_key)
+            html_parts.append(
+                f'<div style="font-size:14px;font-weight:600;color:#1677ff;margin:12px 0 8px">'
+                f'🌈 {label}</div>'
+            )
+            for alias, sign_results in accounts.items():
+                idx += 1
+                html_parts.append(
+                    f'<div style="font-size:14px;font-weight:700;color:#1a1a1a;margin:10px 0 4px">'
+                    f'No.{idx}({alias}):</div>'
+                )
+                for r in sign_results:
+                    game = _GAME_NAME_MAP.get(r.game, r.game)
+                    if r.already_signed:
+                        bg, icon, text = "#52c41a", "✅", f"{game}: 已签"
+                    elif r.success:
+                        bg, icon = "#52c41a", "✅"
+                        detail = f" ({r.reward})" if r.reward else ""
+                        text = f"{game}: 成功{detail}"
+                    else:
+                        bg, icon = "#ff4d4f", "❌"
+                        detail = f" ({r.message})" if r.message else ""
+                        text = f"{game}: 失败{detail}"
+                    html_parts.append(
+                        f'<div style="display:flex;align-items:center;gap:6px;margin:3px 0;padding:4px 0">'
+                        f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+                        f'width:22px;height:22px;border-radius:4px;background:{bg};color:#fff;'
+                        f'font-size:13px;flex-shrink:0">{icon}</span>'
+                        f'<span style="font-size:13px;color:#333">{text}</span></div>'
+                    )
+        html_parts.append(
+            '<div style="margin-top:16px;padding-top:10px;border-top:1px solid #f0f0f0;'
+            'font-size:12px;color:#999;text-align:right">AUTO-MAS 敬上</div>'
+        )
+        html_parts.append("</div>")
+        html_content = "\n".join(html_parts)
 
         try:
             if Config.get("Notify", "IfSendMail"):
-                await Notify.send_mail("网页", title, message_text, Config.get("Notify", "ToAddress"))
+                await Notify.send_mail("网页", title, html_content, Config.get("Notify", "ToAddress"))
 
             if Config.get("Notify", "IfServerChan"):
-                await Notify.ServerChanPush(title, message_text, Config.get("Notify", "ServerChanKey"))
+                await Notify.ServerChanPush(title, text_content, Config.get("Notify", "ServerChanKey"))
 
             for webhook in Config.Notify_CustomWebhooks.values():
-                await Notify.WebhookPush(title, message_text, webhook)
+                await Notify.WebhookPush(title, text_content, webhook)
 
             if Config.get("Notify", "IfKoishiSupport"):
-                await Notify.send_koishi(message_text)
+                await Notify.send_koishi(text_content)
 
         except Exception as e:
             logger.error(f"推送签到通知失败: {e}")
