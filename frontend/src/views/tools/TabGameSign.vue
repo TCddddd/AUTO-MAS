@@ -78,24 +78,6 @@ const platformCards = computed(() => {
                 })
             }
         }
-        // 按账号分组签到结果
-        const accountMap = new Map<string, { signed: boolean; rewards: string[]; games: string[] }>()
-        for (const r of results) {
-            const normName = normalizeName(r.account || '未知')
-            const displayName = mapGameName(r.game || '')
-            const existing = accountMap.get(normName)
-            if (existing) {
-                existing.signed = existing.signed || r.success || r.already_signed
-                if (r.reward && !existing.rewards.includes(r.reward)) existing.rewards.push(r.reward)
-                if (displayName && !existing.games.includes(displayName)) existing.games.push(displayName)
-            } else {
-                accountMap.set(normName, {
-                    signed: r.success || r.already_signed,
-                    rewards: r.reward ? [r.reward] : [],
-                    games: displayName ? [displayName] : [],
-                })
-            }
-        }
         const accounts = Array.from(accountMap.entries()).map(([name, data]) => ({
             name, ...data,
         }))
