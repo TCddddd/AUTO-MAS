@@ -43,7 +43,9 @@ def _step_duration(step: dict) -> str:
     except (KeyError, ValueError, AttributeError):
         return "—"
     total = (b.hour - a.hour) * 3600 + (b.minute - a.minute) * 60 + (b.second - a.second)
-    total = max(0, total)
+    if total < 0:
+        # 跨零点（如 23:59:30 → 00:00:30）：时间戳只有时分秒，差值为负即补一天
+        total += 86400
     if total < 60:
         return f"{total}秒"
     return f"{total // 60}分{total % 60}秒"
