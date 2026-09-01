@@ -430,11 +430,9 @@ class AutoProxyTask(TaskExecuteBase):
             )
 
             # 启动日志监控（文件日志）
-            # 传入可调用对象让监控器按日期滚动日志跨零点自动切换新文件，
-            # 避免固定路径在午夜后读不到新日志行而误判超时
             await asyncio.sleep(1)
             await self.log_monitor.start_monitor_file(
-                self._build_log_path, self.log_start_time
+                self.script_log_path, self.log_start_time
             )
 
             self.wait_event.clear()
@@ -607,9 +605,8 @@ class AutoProxyTask(TaskExecuteBase):
             # open_process 内部 search_process 已确认目标进程存在，之后退出才算失败
             switch_result["started"] = True
             await asyncio.sleep(1)
-            # 传可调用对象：跨零点时自动切换到当日新日志，避免误判超时
             await switch_monitor.start_monitor_file(
-                self._build_log_path, datetime.now()
+                self.script_log_path, datetime.now()
             )
 
             try:
