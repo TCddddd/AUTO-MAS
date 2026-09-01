@@ -33,7 +33,7 @@ if str(current_dir) not in sys.path:
 if __name__ == "__main__":
     os.chdir(current_dir)
 
-from app.utils.platform import IS_WINDOWS
+from app.utils.platform import IS_ELEVATED, IS_WINDOWS
 from app.utils import get_logger, sanitize_log_message
 
 logger = get_logger("主程序")
@@ -63,13 +63,8 @@ for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
 
 
 def is_admin() -> bool:
-    """检查当前程序是否以管理员身份运行"""
-    if IS_WINDOWS:
-        try:
-            return ctypes.windll.shell32.IsUserAnAdmin()
-        except:  # noqa: E722
-            return False
-    return True
+    """检查当前程序是否以管理员身份运行（Windows 以外视为已具备权限）"""
+    return IS_ELEVATED if IS_WINDOWS else True
 
 
 def restart_as_admin():
