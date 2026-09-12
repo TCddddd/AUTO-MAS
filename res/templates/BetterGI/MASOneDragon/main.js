@@ -142,7 +142,10 @@ async function dispatchCombat(step) {
         return;
       }
       const p = new AutoDomainParam(s.domainRoundNum != null ? s.domainRoundNum : 1);
-      if (partyName) p.partyName = partyName;
+      // 队伍无条件赋值：空 = 不切换队伍（BGI AutoDomainTask.SwitchParty 对空串直接 return）。
+      // 不能用 `if (partyName)` 守卫跳过赋值——那会留下 Param 构造时 SetDefault() 从全局
+      // AutoDomainConfig.PartyName 读来的旧值，表现为「右栏已清空却仍切到旧队伍」。
+      p.partyName = partyName || "";
       if (domainName) p.domainName = domainName;
       if (reward != null) p.sundaySelectedValue = String(reward);
       if (s.autoArtifactSalvage != null) p.autoArtifactSalvage = !!s.autoArtifactSalvage;
@@ -206,9 +209,13 @@ async function dispatchCombat(step) {
       if (s.timeout != null && s.timeout > 0) p.timeout = s.timeout;
       if (s.useFragileResin != null) p.useFragileResin = !!s.useFragileResin;
       if (s.useTransientResin != null) p.useTransientResin = !!s.useTransientResin;
-      // 好感队仅在战斗队伍填写后才透传（冻结态视为空）
-      if (team) p.team = team;
-      if (team && s.friendshipTeam) p.friendshipTeam = s.friendshipTeam;
+      // 队伍无条件赋值：空 = 不切换队伍（BGI AutoLeyLineOutcropTask 仅在 Team 非空时切队）。
+      // 不能用 `if (team)` 守卫跳过——那会留下 Param 构造时 SetDefault() 从全局
+      // AutoLeyLineOutcropConfig.Team 读来的旧值。
+      // 好感队必须随战斗队伍一起清空：BGI 校验「配置好感队时必须配置战斗队伍」，
+      // 且战斗队伍为空时保留好感队会沿用全局 FriendshipTeam（右栏清空却仍切好感队）。
+      p.team = team || "";
+      p.friendshipTeam = team ? s.friendshipTeam || "" : "";
       // 地脉花 Param 在部分 BGI 版本无 setCombatStrategyPath（d.ts 未声明），做存在性守卫防 TypeError
       if (strategy) {
         if (typeof p.setCombatStrategyPath === "function") {
@@ -240,9 +247,13 @@ async function dispatchCombat(step) {
       if (s.condensedResinUseCount != null) setProp(p, "condensedResinUseCount", s.condensedResinUseCount);
       if (s.transientResinUseCount != null) setProp(p, "transientResinUseCount", s.transientResinUseCount);
       if (s.fragileResinUseCount != null) setProp(p, "fragileResinUseCount", s.fragileResinUseCount);
-      // 右栏幽境面板的战斗队伍/策略优先（fightTeamName/strategyName 来自 globalStygian），
-      // 留空时 Param 不设置，BGI 回退全局 config.json 段（顶部通用队伍/策略兜底）。
-      if (s.fightTeamName) setProp(p, "fightTeamName", s.fightTeamName);
+      // 右栏幽境面板的战斗队伍/策略优先（fightTeamName/strategyName 来自 globalStygian）。
+      // 策略留空时 Param 不设置，由 BGI 回退全局 config.json 段——「空 = 跟随顶部通用策略」
+      // 由 MAS 物化的全局叶子保证（见 one_dragon.apply_global_battle_strategy）。
+      // 队伍则无条件赋值：空 = 不切换队伍（BGI AutoStygianOnslaughtTask.SwitchTeam 对空串直接 return）。
+      // 跳过赋值会留下 Param 构造时 SetDefault() 从全局 autoStygianOnslaughtConfig.fightTeamName
+      // 读来的旧值，表现为「右栏已清空却仍切到旧队伍」。
+      setProp(p, "fightTeamName", s.fightTeamName || "");
       const stygianStrategy = s.strategyName || s.combatStrategyPath;
       // 幽境 Param 无 combatStrategyPath 属性：setCombatStrategyPath(strategyName) 有副作用，
       // 内部把 "User\AutoFight\<策略名>.txt" 写入 CombatScriptBagPath（源码已核实）。
@@ -276,7 +287,10 @@ async function dispatchCombat(step) {
       // SetDefault 兜底：那会读 BGI 全局 autoBossConfig.bossName，使右栏显示「未选择首领」
       // 时静默讨伐一个 BGI 旧配置里的首领。
       setProp(p, "bossName", s.bossName);
-      if (s.teamName) setProp(p, "teamName", s.teamName);
+      // 队伍无条件赋值：空 = 不切换队伍（BGI AutoBossTask.Prepare 对空串直接 return）。
+      // 跳过赋值会留下 Param 构造时 SetDefault() 从全局 autoBossConfig.teamName 读来的旧值，
+      // 表现为「右栏已清空却仍切到旧队伍」。
+      setProp(p, "teamName", s.teamName || "");
       if (s.specifyRunCount != null) setProp(p, "specifyRunCount", !!s.specifyRunCount);
       if (s.runCount != null) setProp(p, "runCount", s.runCount);
       if (s.useTransientResin != null) setProp(p, "useTransientResin", !!s.useTransientResin);
