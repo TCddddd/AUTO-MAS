@@ -1918,6 +1918,7 @@ export default {
     bettergiProjectSaved: '方案已保存',
     bettergiProjectSettingsSave: '保存设置',
     bettergiProjectToolbarTip: '拖动卡片可调整方案顺序',
+    bettergiProjectStandaloneTip: '点击「添加脚本」可将其与更多脚本组成配置组',
     bettergiProjectUnselect: '取消选择',
     bettergiProjectZoom: '缩放',
   },

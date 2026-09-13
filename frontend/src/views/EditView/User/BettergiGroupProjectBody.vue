@@ -27,16 +27,18 @@
           :title="t('edit.bettergiProjectClearConfirm')"
           :ok-text="t('edit.ok')"
           :cancel-text="t('edit.cancel')"
-          :disabled="!projects.length"
+          :disabled="!projects.length || isStandaloneSingle"
           @confirm="clearProjects"
         >
-          <a-button size="small" danger :disabled="!projects.length">
+          <a-button size="small" danger :disabled="!projects.length || isStandaloneSingle">
             <template #icon><ClearOutlined /></template>
             {{ t('edit.bettergiProjectClearScript') }}
           </a-button>
         </a-popconfirm>
       </a-space>
-      <span class="bgi-project-toolbar-tip">{{ t('edit.bettergiProjectToolbarTip') }}</span>
+      <span class="bgi-project-toolbar-tip">
+        {{ isStandaloneSingle ? t('edit.bettergiProjectStandaloneTip') : t('edit.bettergiProjectToolbarTip') }}
+      </span>
     </div>
 
     <!-- 多选操作提示条（Ctrl 逐个 / Shift 区间，选中超过 1 行时显示） -->
@@ -259,6 +261,8 @@ const logger = window.electronAPI.getLogger('BetterGI配置组项目编辑')
 
 const loading = ref(false)
 const saving = ref(false)
+// 是否已存在 per-user 配置组副本（js/路径 未编辑时为 false，仅合成单项目展示）
+const hasPerUserReplica = ref(false)
 
 const isKeyMouse = computed<boolean>(() => props.kind === 'keymouse')
 // 可读取项目列表：配置组 / 录制 为真实配置组；js / 路径 以 per-user ScriptGroup 副本形式当作可编辑配置组管理
@@ -267,8 +271,14 @@ const isScriptGroup = computed<boolean>(() => {
   const k = props.kind
   return k === 'scriptgroup' || k === 'keymouse' || k === 'js' || k === 'pathing'
 })
-// 可选择（Shift/Ctrl 多选）/可增删：四类可编辑配置组（scriptgroup / keymouse / js / pathing）均支持
-const selectable = computed<boolean>(() => isScriptGroup.value && props.editable)
+// 独立单脚本（JS/路径 未生成 per-user 副本）：仅展示单项目，禁用选中/移除/清空以免误清空为「空组」；
+// 仅「添加脚本」可将其转为真正的多项目配置组。脚本组/录制与「已转为配置组」的 JS/路径 不受限。
+const isStandaloneSingle = computed<boolean>(
+  () => (props.kind === 'js' || props.kind === 'pathing') && !hasPerUserReplica.value
+)
+// 可选择（Shift/Ctrl 多选）/可增删：四类可编辑配置组（scriptgroup / keymouse / js / pathing）均支持，
+// 但独立单脚本（无 per-user 副本）不可选中——避免误清空为「空组」
+const selectable = computed<boolean>(() => isScriptGroup.value && props.editable && !isStandaloneSingle.value)
 // 可拖拽排序：配置组 json 且至少两个项目
 const isSortable = computed<boolean>(
   () => selectable.value && projects.value.length > 1
@@ -348,7 +358,7 @@ const handleBlankClick = (event: MouseEvent) => {
 // Ctrl/Cmd=逐个切换多选；Shift=从锚点行到当前行区间多选。
 // 双击（打开设置弹窗）由 dblclick 独立处理，不参与多选。
 const handleRowClick = (row: ProjectRow, index: number, event: MouseEvent) => {
-  if (!props.editable || !isScriptGroup.value) return
+  if (!props.editable || !isScriptGroup.value || isStandaloneSingle.value) return
   const uid = row._uid
   if (typeof uid !== 'number') return
   if (event.shiftKey) {
@@ -387,6 +397,7 @@ const reload = async () => {
   if (!isScriptGroup.value || !props.groupName || !props.userId) {
     // JS/路径：单项目虚拟组（项目名=显示名；folder 供双击读设置）
     if (props.kind === 'js' || props.kind === 'pathing') {
+      hasPerUserReplica.value = false
       clearSelection()
       projects.value = [
         {
@@ -411,6 +422,7 @@ const reload = async () => {
       // js/路径 无 per-user 配置组副本：合成一个带 type/status 等字段的可保存单项目，
       // 使「添加脚本 / 移除脚本 / 清空」能直接落盘为配置组（无需切换 kind）。
       if (props.kind === 'js' || props.kind === 'pathing') {
+        hasPerUserReplica.value = false
         clearSelection()
         let name = props.displayName || props.groupName
         let folderName: string | undefined = props.folderName || undefined
@@ -447,6 +459,7 @@ const reload = async () => {
     groupJson.value = data
     const list = Array.isArray(data.projects) ? data.projects : []
     projects.value = list.map(item => ({ ...item, _uid: ++projectSeq }))
+    hasPerUserReplica.value = true
     clearSelection()
   } catch (e) {
     logger.error(e instanceof Error ? e.message : String(e))
@@ -485,6 +498,8 @@ const persistProjects = async () => {
       throw new Error(resp.message || t('edit.bettergiProjectSaveFailed'))
     }
     groupJson.value = { ...groupJson.value, projects: rows }
+    // 落盘后即存在 per-user 副本：JS/路径 由「独立单脚本」转为真正的配置组，解除清空/移除限制
+    if (props.kind === 'js' || props.kind === 'pathing') hasPerUserReplica.value = true
     message.success(t('edit.bettergiProjectSaved'))
   } catch (e) {
     logger.error(e instanceof Error ? e.message : String(e))

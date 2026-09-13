@@ -2028,6 +2028,7 @@ export default {
     bettergiProjectSaved: 'Project saved',
     bettergiProjectSettingsSave: 'Save settings',
     bettergiProjectToolbarTip: 'Drag cards to reorder projects',
+    bettergiProjectStandaloneTip: 'Click "Add script" to combine it with more scripts into a config group',
     bettergiProjectUnselect: 'Unselect',
     bettergiProjectZoom: 'Zoom',
   },

@@ -1687,6 +1687,7 @@ export default {
     bettergiProjectSaved: 'プロジェクトを保存しました',
     bettergiProjectSettingsSave: '設定を保存',
     bettergiProjectToolbarTip: 'カードをドラッグしてプロジェクトの順序を変更',
+    bettergiProjectStandaloneTip: '「スクリプトを追加」で他のスクリプトと設定グループにまとめられます',
     bettergiProjectUnselect: '選択解除',
     bettergiProjectZoom: 'ズーム',
   },
