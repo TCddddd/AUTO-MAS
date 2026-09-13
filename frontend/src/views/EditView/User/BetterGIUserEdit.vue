@@ -1461,6 +1461,7 @@ const {
   selectedKeys: selectedCustomGroupKeys,
   syncFromForm: syncCustomGroupsFromForm,
   loadFromBettergi: loadCustomGroupsFromBettergi,
+  listFromBettergi: listBgiCustomGroups,
   toggleMaster: toggleCustomGroupsMaster,
   deleteSelected: deleteSelectedCustomGroups,
   toggleEnabled: toggleCustomGroupEnabled,
@@ -3223,6 +3224,8 @@ const groupCandidateAnchor = ref(-1)
 const keyMouseCandidateAnchor = ref(-1)
 // 地图追踪文件行 Shift 区间锚点（index in selectedPathingFiles）
 const pathingFileAnchor = ref(-1)
+// BetterGI 现有自定义组名（仅作弹窗候选；打开弹窗不再合并进管理表，避免自动入队）
+const bgiCustomCandidates = ref<string[]>([])
 
 // 加载可加入一条龙的 BetterGI 自定义 JS 脚本（实时扫描，反映玩家手工放置/订阅的脚本）
 const loadJsScripts = async () => {
@@ -3305,6 +3308,13 @@ const buildCandidates = () => {
       jsTaken.add(name)
     }
   }
+  // BetterGI 现有、但尚未入管理表的自定义组仅作候选：用户显式确认才入队（不再打开即自动入队）
+  for (const name of bgiCustomCandidates.value) {
+    if (!jsTaken.has(name) && !customGroupsTable.value.some(r => r.name === name)) {
+      jsItems.push({ kind: 'custom', key: name })
+      jsTaken.add(name)
+    }
+  }
   for (const opt of jsScriptOptions.value) {
     if (!jsTaken.has(opt.value)) {
       jsItems.push({ kind: 'js', key: opt.value })
@@ -3359,7 +3369,11 @@ const openAddModalCommon = async (
   pathingFileAnchor.value = -1
   clearChipSelection()
   addModal.open = true
-  await loadCustomGroupsFromBettergi()
+  // 仅读取 BetterGI 现有自定义组作为弹窗候选；不再合并进管理表，避免打开弹窗即自动入队
+  const bgiGroups = await listBgiCustomGroups()
+  bgiCustomCandidates.value = bgiGroups
+    .map(r => r.name)
+    .filter(n => resolveStoredRowKind(n) === 'custom')
   await Promise.all([
     loadJsScripts(),
     loadScriptGroups(),
