@@ -4,8 +4,8 @@
     :class="{ 'bgi-project-editor-disabled': !editable }"
     @click.capture="handleBlankClick"
   >
-    <!-- 工具栏：添加脚本 / 删除脚本（仅配置组可编辑且非单项目虚拟组） -->
-    <div v-if="isScriptGroup && editable && !isKeyMouse" class="bgi-project-toolbar">
+    <!-- 工具栏：添加脚本 / 删除脚本 / 清空（配置组类：scriptgroup 与录制(keymouse) 真实配置组均可编辑） -->
+    <div v-if="isScriptGroup && editable" class="bgi-project-toolbar">
       <a-space size="small">
         <a-button size="small" type="primary" ghost :disabled="!editable" @click="emit('add-script')">
           <template #icon><PlusOutlined /></template>
@@ -265,10 +265,8 @@ const isKeyMouse = computed<boolean>(() => props.kind === 'keymouse')
 const isScriptGroup = computed<boolean>(
   () => props.kind === 'scriptgroup' || isKeyMouse.value
 )
-// 可选择（Shift/Ctrl 多选）/可增删：仅可编辑配置组；录制为只读展示（避免误清空导致无内容）
-const selectable = computed<boolean>(
-  () => isScriptGroup.value && props.editable && !isKeyMouse.value
-)
+// 可选择（Shift/Ctrl 多选）/可增删：仅可编辑配置组（scriptgroup 与录制均支持）；js/路径为单项目虚拟组，isScriptGroup 为 false
+const selectable = computed<boolean>(() => isScriptGroup.value && props.editable)
 // 可拖拽排序：配置组 json 且至少两个项目
 const isSortable = computed<boolean>(
   () => selectable.value && projects.value.length > 1
@@ -348,7 +346,7 @@ const handleBlankClick = (event: MouseEvent) => {
 // Ctrl/Cmd=逐个切换多选；Shift=从锚点行到当前行区间多选。
 // 双击（打开设置弹窗）由 dblclick 独立处理，不参与多选。
 const handleRowClick = (row: ProjectRow, index: number, event: MouseEvent) => {
-  if (!props.editable || !isScriptGroup.value || isKeyMouse.value) return
+  if (!props.editable || !isScriptGroup.value) return
   const uid = row._uid
   if (typeof uid !== 'number') return
   if (event.shiftKey) {
