@@ -4,7 +4,7 @@
     :class="{ 'bgi-project-editor-disabled': !editable }"
     @click.capture="handleBlankClick"
   >
-    <!-- 工具栏：添加脚本 / 删除脚本 / 清空（配置组类：scriptgroup 与录制(keymouse) 真实配置组均可编辑） -->
+    <!-- 工具栏：添加脚本 / 删除脚本 / 清空（四类配置组 scriptgroup / keymouse / js / pathing 均可编辑） -->
     <div v-if="isScriptGroup && editable" class="bgi-project-toolbar">
       <a-space size="small">
         <a-button size="small" type="primary" ghost :disabled="!editable" @click="emit('add-script')">
@@ -261,11 +261,13 @@ const loading = ref(false)
 const saving = ref(false)
 
 const isKeyMouse = computed<boolean>(() => props.kind === 'keymouse')
-// 可读取项目列表：配置组 或 录制（录制以「含单 KeyMouse 项目的配置组」形式读取）
-const isScriptGroup = computed<boolean>(
-  () => props.kind === 'scriptgroup' || isKeyMouse.value
-)
-// 可选择（Shift/Ctrl 多选）/可增删：仅可编辑配置组（scriptgroup 与录制均支持）；js/路径为单项目虚拟组，isScriptGroup 为 false
+// 可读取项目列表：配置组 / 录制 为真实配置组；js / 路径 以 per-user ScriptGroup 副本形式当作可编辑配置组管理
+// （后端详情/保存接口与运行时物化均按原名识别 per-user 副本，四类一视同仁）
+const isScriptGroup = computed<boolean>(() => {
+  const k = props.kind
+  return k === 'scriptgroup' || k === 'keymouse' || k === 'js' || k === 'pathing'
+})
+// 可选择（Shift/Ctrl 多选）/可增删：四类可编辑配置组（scriptgroup / keymouse / js / pathing）均支持
 const selectable = computed<boolean>(() => isScriptGroup.value && props.editable)
 // 可拖拽排序：配置组 json 且至少两个项目
 const isSortable = computed<boolean>(
@@ -406,6 +408,36 @@ const reload = async () => {
         props.groupName
       )
     if (resp.code !== 200) {
+      // js/路径 无 per-user 配置组副本：合成一个带 type/status 等字段的可保存单项目，
+      // 使「添加脚本 / 移除脚本 / 清空」能直接落盘为配置组（无需切换 kind）。
+      if (props.kind === 'js' || props.kind === 'pathing') {
+        clearSelection()
+        let name = props.displayName || props.groupName
+        let folderName: string | undefined = props.folderName || undefined
+        if (props.kind === 'pathing') {
+          // 路径项目名=相对路径末段 + .json，folderName=目录；与 toScriptGroupProjectRow 的 pathing 分支一致
+          const rel = String(props.groupName || '').trim()
+          const segs = rel.split('/')
+          const file = segs.pop() || rel
+          name = `${file}.json`
+          folderName = segs.join('/') || undefined
+        }
+        projects.value = [
+          {
+            name,
+            folderName,
+            key: props.groupName,
+            type: props.kind === 'js' ? 'Javascript' : 'Pathing',
+            status: 'Enabled',
+            schedule: 'Daily',
+            runNum: 1,
+            index: 0,
+            _uid: ++projectSeq,
+          },
+        ]
+        groupJson.value = {}
+        return
+      }
       message.warning(resp.message || t('edit.bettergiProjectLoadFailed'))
       projects.value = []
       groupJson.value = {}

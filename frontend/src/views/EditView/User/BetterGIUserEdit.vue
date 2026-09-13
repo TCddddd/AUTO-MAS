@@ -3350,10 +3350,18 @@ const openAddToDragonModal = async () => {
 }
 
 // 配置组编辑器「添加脚本」：复用同一弹窗但冻结「配置组」标签，只可加 JS 脚本/地图追踪/录制到配置组。
-// 适用 scriptgroup 与录制(keymouse) 真实配置组；js/路径为独立单脚本，无对应配置组 json，不在此打开。
+// 适用 scriptgroup / 录制(keymouse) / 脚本(js) / 路径(pathing) 四类：后两者以 per-user ScriptGroup 副本充当配置组。
 const openAddScriptToGroup = async () => {
   const sel = selectedGroupIdentity.value
-  if (!sel || (sel.kind !== 'scriptgroup' && sel.kind !== 'keymouse') || !groupsEditable.value) return
+  if (
+    !sel ||
+    (sel.kind !== 'scriptgroup' &&
+      sel.kind !== 'keymouse' &&
+      sel.kind !== 'js' &&
+      sel.kind !== 'pathing') ||
+    !groupsEditable.value
+  )
+    return
   addModal.addToGroupMode = true
   await openAddModalCommon('js')
 }
