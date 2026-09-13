@@ -1681,6 +1681,8 @@ export default {
     bettergiProjectReadmeTab: 'README',
     bettergiProjectRemoveConfirm: 'このプロジェクトを削除しますか？',
     bettergiProjectRemoveScript: 'スクリプトを削除',
+    bettergiProjectClearScript: 'スクリプトを全削除',
+    bettergiProjectClearConfirm: 'この設定グループの全スクリプトを削除しますか？元に戻せません',
     bettergiProjectRowTip: 'クリックで表示・編集',
     bettergiProjectSaved: 'プロジェクトを保存しました',
     bettergiProjectSettingsSave: '設定を保存',

@@ -1912,6 +1912,8 @@ export default {
     bettergiProjectReadmeTab: '说明',
     bettergiProjectRemoveConfirm: '确认移除该方案？',
     bettergiProjectRemoveScript: '移除脚本',
+    bettergiProjectClearScript: '清空脚本',
+    bettergiProjectClearConfirm: '确认清空该配置组的全部脚本？此操作不可撤销',
     bettergiProjectRowTip: '点击查看与编辑',
     bettergiProjectSaved: '方案已保存',
     bettergiProjectSettingsSave: '保存设置',

@@ -103,6 +103,7 @@ defineExpose({
   reload: () => bodyRef.value?.reload(),
   addProjects: (rows: unknown[]) => bodyRef.value?.addProjects(rows as never[]),
   removeSelectedProjects: () => bodyRef.value?.removeSelectedProjects(),
+  clearProjects: () => bodyRef.value?.clearProjects(),
 })
 </script>
 

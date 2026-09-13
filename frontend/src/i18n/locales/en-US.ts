@@ -2022,6 +2022,8 @@ export default {
     bettergiProjectReadmeTab: 'README',
     bettergiProjectRemoveConfirm: 'Remove this project?',
     bettergiProjectRemoveScript: 'Remove script',
+    bettergiProjectClearScript: 'Clear scripts',
+    bettergiProjectClearConfirm: 'Clear all scripts in this config group? This cannot be undone',
     bettergiProjectRowTip: 'Click to view and edit',
     bettergiProjectSaved: 'Project saved',
     bettergiProjectSettingsSave: 'Save settings',

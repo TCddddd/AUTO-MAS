@@ -23,6 +23,18 @@
             {{ t('edit.bettergiProjectRemoveScript') }}
           </a-button>
         </a-popconfirm>
+        <a-popconfirm
+          :title="t('edit.bettergiProjectClearConfirm')"
+          :ok-text="t('edit.ok')"
+          :cancel-text="t('edit.cancel')"
+          :disabled="!projects.length"
+          @confirm="clearProjects"
+        >
+          <a-button size="small" danger :disabled="!projects.length">
+            <template #icon><ClearOutlined /></template>
+            {{ t('edit.bettergiProjectClearScript') }}
+          </a-button>
+        </a-popconfirm>
       </a-space>
       <span class="bgi-project-toolbar-tip">{{ t('edit.bettergiProjectToolbarTip') }}</span>
     </div>
@@ -198,7 +210,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
-import { CheckCircleFilled, DeleteOutlined, HolderOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { CheckCircleFilled, ClearOutlined, DeleteOutlined, HolderOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
 import { BetterGiService } from '@/api'
 import type {
@@ -476,6 +488,14 @@ const removeSelectedProjects = async () => {
   await persistProjects()
 }
 
+// 清空全部脚本项目（破坏性，需二次确认）
+const clearProjects = async () => {
+  if (!isScriptGroup.value || !projects.value.length) return
+  projects.value = []
+  clearSelection()
+  await persistProjects()
+}
+
 const projRowKey = (proj: ProjectRow, index: number): string => {
   const base = proj.folderName
     ? proj.folderName
@@ -652,7 +672,7 @@ watch(
   },
   { immediate: true }
 )
-defineExpose({ reload, addProjects, removeSelectedProjects })
+defineExpose({ reload, addProjects, removeSelectedProjects, clearProjects })
 </script>
 
 <style scoped>
