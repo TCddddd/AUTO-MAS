@@ -1939,8 +1939,9 @@ const initDragonList = () => {
     // 自定义组仅在总开关开启时并入（来自 BetterGI 现有配置 / CustomGroups）
     if (groupsShowCustom.value) {
       for (const row of customGroupsTable.value) {
-        const kind: ConfigGroupKind = resolveStoredRowKind(row.name)
-        pushDragon(order, { kind, key: row.name })
+        // 仅真实自定义组并入队列；路径/录制/ScriptGroup 各有独立入队口径，不在此镜像
+        if (resolveStoredRowKind(row.name) !== 'custom') continue
+        pushDragon(order, { kind: 'custom', key: row.name })
       }
     }
     // 与 readStoredQueue 第二遍一致：战斗组每实例启用态来自 Plan，自定义组缺省按管理表回退。
@@ -1976,10 +1977,9 @@ const appendCustomRows = () => {
   if (!dragonListReady || !groupsShowCustom.value) return
   let appended = false
   for (const row of customGroupsTable.value) {
-    const item: ConfigGroupIdentity = {
-      kind: resolveStoredRowKind(row.name),
-      key: row.name,
-    }
+    // 仅真实自定义组镜像进队列；路径/录制/ScriptGroup 名各有独立入队口径，避免被当成配置组补进一条龙
+    if (resolveStoredRowKind(row.name) !== 'custom') continue
+    const item: ConfigGroupIdentity = { kind: 'custom', key: row.name }
     if (!inDragon(item)) {
       dragonList.value.push(makeDragonRow(item))
       appended = true
@@ -2082,6 +2082,8 @@ const addToDragon = (item: ConfigGroupIdentity) => {
     }
   } else if (item.kind === 'stamina') {
     staminaInDragon.value = true
+  } else if (item.kind === 'pathing' || item.kind === 'keymouse') {
+    // 路径/录制为独立队列项，不写入 CustomGroups（避免被当成自定义配置组污染一条龙）
   } else {
     // 自定义组：确保进入 CustomGroups（启用）并打开总开关
     if (addCustomGroupByName(item.key)) {
