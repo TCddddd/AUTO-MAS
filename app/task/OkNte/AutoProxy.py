@@ -63,6 +63,7 @@ from .config_schema import (
 from .push_log import OKNTE_PUSH_RULES, oknte_resolve
 from .tools import push_notification
 from .tools.account_switch import async_switch_account
+from .tools.backup_archive import archive_mas_runtime_backup
 from .tools.launcher_start import async_start_game_via_launcher
 
 logger = get_logger("OK-NTE 自动代理")
@@ -108,18 +109,24 @@ def _yes_no(value: bool) -> str:
     return "是" if value else "否"
 
 
+def _find_pids_by_name(process_name: str) -> list[int]:
+    """按进程名收集 PID（同步全进程扫描，调用方放到线程里跑）。"""
+    pids: list[int] = []
+    for process in psutil.process_iter(["name"]):
+        try:
+            if process.info["name"] == process_name:
+                pids.append(process.pid)
+        except psutil.Error:
+            continue
+    return pids
+
+
 # 对齐 MaaEnd：专项内置致命日志片段（非用户 Success/Error 配置）；`Script.ErrorLog` 仅追加补充子串
 _OKNTE_BUILTIN_FATAL: tuple[tuple[str, str], ...] = (
     ("connected:False", "OK-NTE 未连接游戏客户端"),
     ("Resolution Error", "OK-NTE 游戏分辨率不符合要求"),
     ("Timed out waiting for game process", "OK-NTE 等待游戏进程超时"),
     ("Timed out waiting for launcher process", "OK-NTE 等待启动器进程超时"),
-)
-
-# prepare 中 ErrorLog 经清洗后为空时回退（与 OkNteConfig 默认串一致）
-_DEFAULT_OKNTE_ERROR_LOG = (
-    "connected:False|Resolution Error|Timed out waiting for game process|"
-    "Timed out waiting for launcher process"
 )
 
 _OKNTE_DAILY_TASK_INDEX = 2
@@ -378,8 +385,9 @@ class AutoProxyTask(TaskExecuteBase):
             if matcher.invalid:
                 logger.warning(f"OK-NTE {name}日志正则语法错误，该标志将不会命中")
         if not self.error_log.configured:
+            # 回退到 OkNteConfig 的 ErrorLog 默认串（唯一来源，不在此另抄一份）
             self.error_log = compile_log_signs(
-                _DEFAULT_OKNTE_ERROR_LOG, SIGN_MODE_SPLIT
+                OkNteConfig().get("Script", "ErrorLog"), SIGN_MODE_SPLIT
             )
             logger.warning(
                 "OK-NTE ErrorLog 去掉过宽容词后为空，已回退为内置默认失败关键词"
@@ -487,6 +495,12 @@ class AutoProxyTask(TaskExecuteBase):
 
         logger.info("开始配置 OK-NTE 运行参数: 自动代理")
         await System.kill_process(self.script_exe_path)
+
+        # 下发前归档 MAS 用户配置（下发源，运行回写 update_config 会覆盖它；
+        # 指纹去重，失败不阻断运行）。native 池不在此处归档：原生配置跨用户
+        # 共享，按用户/重试归档会把上一轮下发的 MAS 配置误当原生内容挤进
+        # 保留池，由 manager.prepare 在任务级一次性完成
+        archive_mas_runtime_backup(self.script_info.script_id, str(self.cur_user_uid))
 
         mas_config_dir = self._ensure_oknte_mas_config_dir()
         self.daily_activity_required = _oknte_daily_activity_enabled(mas_config_dir)
@@ -1120,18 +1134,16 @@ class AutoProxyTask(TaskExecuteBase):
                 await self.game_manager.kill()
             if game_type == "Client":
                 # Game.Path 是启动器，游戏本体按进程名结束；进程管理器只跟踪
-                # 启动器，HTGame.exe 由启动器拉起、可能不在其进程树内
-                for process in psutil.process_iter(["name"]):
+                # 启动器，HTGame.exe 由启动器拉起、可能不在其进程树内。
+                # 全进程扫描放到线程里，不阻塞事件循环
+                for pid in await asyncio.to_thread(
+                    _find_pids_by_name, _NTE_CLIENT_PROCESS
+                ):
                     try:
-                        if process.info["name"] != _NTE_CLIENT_PROCESS:
-                            continue
-                    except psutil.Error:
-                        continue
-                    try:
-                        await System.kill_process_by_pid(process.pid)
+                        await System.kill_process_by_pid(pid)
                     except Exception as e:
                         logger.opt(exception=True).warning(
-                            f"结束异环游戏进程失败 PID: {process.pid}, {e}"
+                            f"结束异环游戏进程失败 PID: {pid}, {e}"
                         )
         except Exception as e:
             logger.opt(exception=True).warning(f"关闭游戏进程失败: {e}")
@@ -1171,8 +1183,9 @@ class AutoProxyTask(TaskExecuteBase):
             return
         deadline = time.monotonic() + _GAME_EXIT_WAIT_SECONDS
         while time.monotonic() < deadline:
-            # 按进程存活判断（不依赖窗口）：窗口销毁后进程可能仍存活片刻
-            if not is_process_alive(process_name):
+            # 按进程存活判断（不依赖窗口）：窗口销毁后进程可能仍存活片刻。
+            # 全进程扫描是同步 IO，放到线程里免得每秒卡一次事件循环
+            if not await asyncio.to_thread(is_process_alive, process_name):
                 logger.info(f"游戏进程已完全退出，继续下一用户: {process_name}")
                 return
             await asyncio.sleep(1)
