@@ -3274,7 +3274,7 @@ const loadKeyMouseScripts = async () => {
 }
 
 // 组装候选项，按标签页拆分：
-//  - addModal.candidates（JS脚本 标签页）：JS 脚本 + 不在 ScriptGroup 目录的现有自定义组
+//  - addModal.candidates（JS脚本 标签页）：JS 脚本 + 仅 custom 来源的现有自定义组
 //  - addModal.groupCandidates（配置组 标签页）：8 内置（默认）+ 体力作战（专项）+ ScriptGroup 目录内容
 // 现有自定义组若命中 ScriptGroup 目录（如「锄地一条龙」），在配置组标签页以 ScriptGroup 形式出现，
 // 故 JS脚本 标签页剔除，避免同一配置两个入口。
@@ -3295,8 +3295,10 @@ const buildCandidates = () => {
   const jsTaken = new Set<string>()
   for (const row of customGroupsTable.value) {
     const name = row.name
-    // 命中 ScriptGroup 配置组目录 / KeyMouseScript 录制目录的名字各有专属标签页，避免同一配置两个入口
-    if (!isScriptGroupName(name) && !isKeyMouseName(name) && !jsTaken.has(name)) {
+    // 现有自定义组按真实来源归类：仅「自定义组(custom)」入列 JS脚本 标签页；
+    // 命中 JS脚本/路径/录制/ScriptGroup 目录的名字各有专属标签页，避免同一配置多处出现。
+    const kind = resolveStoredRowKind(name)
+    if (kind === 'custom' && !jsTaken.has(name)) {
       jsItems.push({ kind: 'custom', key: name })
       jsTaken.add(name)
     }
